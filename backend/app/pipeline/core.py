@@ -1,88 +1,108 @@
+"""Blocking processing helpers; the worker runs these outside the event loop."""
 import json
 import subprocess
+import wave
+from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 
-import httpx
-
-from ..config import NOTES_DIR, settings
-
-OLLAMA = settings.ollama_base_url
-
-PROMPT = """You are building a Zettelkasten. Given the transcript/text below, produce JSON:
-{{
-  "title": "...",
-  "summary": "...",
-  "key_concepts": ["..."],
-  "atomic_notes": [
-    {{"title": "...", "body": "...", "tags": ["..."]}}
-  ]
-}}
-Atomic notes must be small, self-contained, written in your own words. Tags are lowercase, hyphenated.
-
-TEXT:
-{text}
-"""
+from ..config import settings
 
 
-def extract_audio(video_path: Path, out_path: Path) -> Path:
-    subprocess.run(
-        ["ffmpeg", "-y", "-i", str(video_path), "-vn", "-acodec", "libmp3lame", str(out_path)],
-        check=True,
-        capture_output=True,
-    )
+class ProcessingError(Exception):
+    """Safe, actionable message that may be returned to the API client."""
+
+
+@dataclass
+class Transcription:
+    content: str
+    language: str | None = None
+    duration_seconds: float | None = None
+    segments: list[dict] = field(default_factory=list)
+    model: str | None = None
+
+
+def extract_pdf(path: Path) -> Transcription:
+    from pypdf import PdfReader
+    from pypdf.errors import PdfReadError
+
+    try:
+        reader = PdfReader(path)
+        if reader.is_encrypted:
+            raise ProcessingError("Encrypted PDFs are not supported. Upload an unlocked PDF.")
+        if len(reader.pages) > settings.max_pdf_pages:
+            raise ProcessingError(f"PDF exceeds the {settings.max_pdf_pages} page limit.")
+        pages = []
+        length = 0
+        for page in reader.pages:
+            content = page.extract_text() or ""
+            length += len(content) + 2
+            if length > settings.max_text_chars:
+                raise ProcessingError(f"PDF exceeds the {settings.max_text_chars} extracted character limit.")
+            pages.append(content)
+        text = "\n\n".join(pages).strip()
+    except (PdfReadError, ValueError, KeyError) as exc:
+        raise ProcessingError("Cannot read this PDF. Upload a valid, unlocked PDF.") from exc
+    if not text:
+        raise ProcessingError("PDF has no extractable text. Scanned PDFs require OCR, which is not supported yet.")
+    if "\x00" in text:
+        text = text.replace("\x00", "")
+    return Transcription(text)
+
+
+def extract_audio(input_path: Path, out_path: Path) -> Path:
+    try:
+        # Decode one extra second to reject overlong media instead of truncating it.
+        subprocess.run(
+            ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+             "-i", str(input_path), "-map", "0:a:0", "-vn", "-ac", "1", "-ar", "16000",
+             "-t", str(settings.max_media_seconds + 1), "-c:a", "pcm_s16le", str(out_path)],
+            check=True, capture_output=True, timeout=settings.ffmpeg_timeout_seconds,
+        )
+    except FileNotFoundError as exc:
+        raise ProcessingError("FFmpeg is not installed on the backend host.") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise ProcessingError("Audio extraction timed out. Try a shorter media file.") from exc
+    except subprocess.CalledProcessError as exc:
+        raise ProcessingError("Cannot decode media. Upload a valid file with an audio track.") from exc
+    with wave.open(str(out_path), "rb") as audio:
+        duration = audio.getnframes() / audio.getframerate()
+    if duration > settings.max_media_seconds:
+        raise ProcessingError(f"Media exceeds the {settings.max_media_seconds} second limit.")
     return out_path
 
 
-def transcribe(audio_path: Path) -> str:
+@lru_cache(maxsize=1)
+def whisper_model():
     from faster_whisper import WhisperModel
 
-    model = WhisperModel(settings.whisper_model, device="cpu", compute_type="int8")
-    segments, _ = model.transcribe(str(audio_path))
-    return "\n".join(
-        f"- [{s.start:.0f}s] {s.text.strip()}" for s in segments if s.text.strip()
-    )
+    return WhisperModel(settings.whisper_model, device=settings.whisper_device,
+                        compute_type=settings.whisper_compute_type,
+                        download_root=settings.whisper_cache_dir)
 
 
-async def ollama_json(text: str) -> dict:
-    async with httpx.AsyncClient(timeout=600) as client:
-        resp = await client.post(
-            f"{OLLAMA}/api/generate",
-            json={
-                "model": settings.llm_model,
-                "prompt": PROMPT.format(text=text[:20000]),
-                "stream": False,
-                "format": "json",
-            },
-        )
-        resp.raise_for_status()
-        return json.loads(resp.json()["response"])
+def transcribe(audio_path: Path) -> Transcription:
+    segments, info = whisper_model().transcribe(str(audio_path), vad_filter=True)
+    items = [{"start": s.start, "end": s.end, "text": s.text.strip()}
+             for s in segments if s.text.strip()]
+    content = "\n".join(item["text"] for item in items)
+    if not content:
+        raise ProcessingError("No speech was detected in the media file.")
+    if len(content) > settings.max_text_chars:
+        raise ProcessingError("Transcript exceeds the configured character limit.")
+    return Transcription(content, info.language, info.duration, items, settings.whisper_model)
 
 
-async def embed(text: str) -> list[float]:
-    async with httpx.AsyncClient(timeout=120) as client:
-        resp = await client.post(
-            f"{OLLAMA}/api/embeddings",
-            json={"model": settings.embed_model, "prompt": text[:4000]},
-        )
-        resp.raise_for_status()
-        return resp.json()["embedding"]
+def atomic_write(path: Path, content: str) -> None:
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    try:
+        temporary.write_text(content, encoding="utf-8")
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
-def write_note(note_id: str, title: str, body: str, tags: list[str], source_id: str | None) -> Path:
-    path = NOTES_DIR / f"{note_id}.md"
-    front = "---\n"
-    front += f"title: {title}\n"
-    if source_id:
-        front += f"source_id: {source_id}\n"
-    if tags:
-        front += f"tags: [{', '.join(tags)}]\n"
-    front += "---\n"
-    path.write_text(front + body + "\n", encoding="utf-8")
-    return path
-
-
-def append_links(path: Path, linked_ids: list[str]) -> None:
-    if not linked_ids:
-        return
-    with path.open("a", encoding="utf-8") as f:
-        f.write("\nRelated: " + " ".join(f"[[{nid}]]" for nid in linked_ids) + "\n")
+def write_note(path: Path, title: str, content: str, source_id: str) -> None:
+    # JSON string quoting is valid YAML, including quotes, colons and newlines.
+    frontmatter = f"---\ntitle: {json.dumps(title, ensure_ascii=False)}\nsource_id: {source_id}\n---\n\n"
+    atomic_write(path, frontmatter + content + "\n")

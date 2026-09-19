@@ -6,43 +6,44 @@ services:
       POSTGRES_PASSWORD: zk
       POSTGRES_DB: zk
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${ZK_POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zk -d zk"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     restart: unless-stopped
-
-  ollama:
-    image: ollama/ollama:latest
-    ports:
-      - "127.0.0.1:11434:11434"
-    volumes:
-      - ollama:/root/.ollama
-    restart: unless-stopped
-    # Windows with NVIDIA: uncomment to pass through the GPU
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
 
   api:
     build: ./backend
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:${ZK_API_PORT:-8000}:8000"
     environment:
       ZK_DATABASE_URL: postgresql+asyncpg://zk:zk@db:5432/zk
-      ZK_OLLAMA_BASE_URL: http://ollama:11434
       ZK_DATA_DIR: /data/zettelkasten
+      ZK_WHISPER_MODEL: ${ZK_WHISPER_MODEL:-base}
+      ZK_WHISPER_CACHE_DIR: /models
+      ZK_MAX_UPLOAD_MB: ${ZK_MAX_UPLOAD_MB:-100}
+      ZK_MAX_MEDIA_SECONDS: ${ZK_MAX_MEDIA_SECONDS:-7200}
+      ZK_CORS_ORIGINS: '${ZK_CORS_ORIGINS:-["http://localhost:3000","http://localhost:5173"]}'
     volumes:
       - zk-data:/data/zettelkasten
+      - whisper-models:/models
     depends_on:
-      - db
-      - ollama
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    stop_grace_period: 30s
     restart: unless-stopped
 
 volumes:
   pgdata:
-  ollama:
   zk-data:
+  whisper-models:
