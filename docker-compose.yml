@@ -33,7 +33,8 @@ services:
       - "127.0.0.1:8000:8000"
     environment:
       ZK_DATABASE_URL: postgresql+asyncpg://zk:zk@db:5432/zk
-      ZK_OLLAMA_BASE_URL: http://ollama:11434
+      ZK_OLLAMA_BASE_URL: http://host.docker.internal:11434
+      ZK_LLM_MODEL: qwen2.5:7b
       ZK_DATA_DIR: /data/zettelkasten
     volumes:
       - zk-data:/data/zettelkasten
