@@ -85,3 +85,20 @@ class HealthResponse(BaseModel):
     ok: bool
     database: Literal["ok", "unavailable"]
     worker: Literal["running", "stopped"]
+
+
+class NoteRename(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+
+    @field_validator("title")
+    @classmethod
+    def clean_title(cls, value: str) -> str:
+        value = value.strip()
+        if not value or any(ord(char) < 32 or ord(char) == 127 for char in value):
+            raise ValueError("Enter a title without line breaks or control characters")
+        return value
+
+
+class NoteDeleted(BaseModel):
+    id: str
+    deleted: bool = True

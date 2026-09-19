@@ -10,13 +10,19 @@ import { request, type NoteDetail } from "@/lib/api";
 import { GradientTabs } from "@/components/ui/gradient-tabs";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
-import { useNote, useSource, useTranscript } from "@/hooks/use-vault";
+import {
+  useIntelligence,
+  useNote,
+  useSource,
+  useTranscript,
+} from "@/hooks/use-vault";
 import { MediaRenderer } from "@/components/media-renderer/main";
 const NoteEditor = dynamic(() => import("@/components/note-renderer/editor"), {
   ssr: false,
   loading: () => <LoadingState>Loading editor…</LoadingState>,
 });
 import { ErrorState, LoadingState } from "@/components/request-state";
+import { NoteConnections } from "@/components/note-connections";
 import { formatDate } from "@/lib/dates";
 
 export function NoteDetailView({ id }: { id: string }) {
@@ -25,6 +31,7 @@ export function NoteDetailView({ id }: { id: string }) {
   const [savingTitle, setSavingTitle] = useState(false);
   const queryClient = useQueryClient();
   const note = useNote(id);
+  const intelligence = useIntelligence(id);
   const source = useSource(note.data?.source_id ?? null);
   const transcript = useTranscript(
     note.data?.source_id ?? null,
@@ -167,6 +174,8 @@ export function NoteDetailView({ id }: { id: string }) {
               noteId={id}
               content={note.data.content}
               blocks={note.data.blocks}
+              mentions={intelligence.data?.mentions}
+              formattingEnabled={intelligence.data?.enabled}
               onSave={async (document) => {
                 const saved = await request<NoteDetail>(
                   `/notes/${encodeURIComponent(id)}`,
@@ -179,6 +188,7 @@ export function NoteDetailView({ id }: { id: string }) {
                 queryClient.setQueryData(["note", id], saved);
               }}
             />
+            <NoteConnections id={id} />
           </div>
           {tab === "media" && source.data && transcript.data && (
             <MediaRenderer

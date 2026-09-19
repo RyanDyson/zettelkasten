@@ -20,6 +20,14 @@ class Settings(BaseSettings):
     ffmpeg_timeout_seconds: int = Field(default=600, ge=1)
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
     worker_poll_seconds: float = Field(default=1, gt=0)
+    intelligence_enabled: bool = True
+    ollama_base_url: str = "http://localhost:11434"
+    llm_model: str = "qwen2.5:7b"
+    embed_model: str = "nomic-embed-text"
+    intelligence_timeout_seconds: float = Field(default=180, gt=0)
+    intelligence_chunk_chars: int = Field(default=3000, ge=500, le=6000)
+    intelligence_relation_threshold: float = Field(default=0.75, ge=0, le=1)
+    intelligence_semantic_threshold: float = Field(default=0.92, ge=0, le=1)
 
 
 settings = Settings()

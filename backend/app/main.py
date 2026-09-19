@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import suppress
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
@@ -8,7 +9,8 @@ from sqlalchemy import text
 
 from .config import ensure_directories, settings
 from .db import SessionLocal, dispose, engine, init_db
-from .routers import ingest, jobs
+from .routers import ingest, jobs, intelligence
+from .intelligence.service import worker_loop as intelligence_loop
 from .schemas import HealthResponse
 from .worker import worker_loop
 
@@ -29,12 +31,18 @@ async def lifespan(app: FastAPI):
                 stop = asyncio.Event()
                 task = asyncio.create_task(worker_loop(stop))
                 app.state.worker_task = task
+                intelligence_task = asyncio.create_task(intelligence_loop(stop)) if settings.intelligence_enabled else None
+                app.state.intelligence_task = intelligence_task
                 try:
                     yield
                 finally:
                     stop.set()
                     # Let in-flight file/Whisper work finish before releasing ownership.
                     await task
+                    if intelligence_task:
+                        intelligence_task.cancel()
+                        with suppress(asyncio.CancelledError):
+                            await intelligence_task
             finally:
                 await lock.execute(text("SELECT pg_advisory_unlock(841729013)"))
                 await lock.commit()
@@ -46,9 +54,10 @@ app = FastAPI(
     title="Zettelkasten Ingestion API", version="1.0.0", lifespan=lifespan,
     description=("Upload PDF, audio, or video → poll the job → read text from PostgreSQL. "
                  "PDFs must contain extractable text. Media uses FFmpeg and local Whisper. "
-                 "One Markdown note is saved per source. Automatic linking and LLM processing are deferred. "
+                 "One Markdown note is saved per source. Local LLM indexing runs independently after transcription; "
+                 "read /intelligence/status or /notes/{id}/intelligence for its progress. "
                  "This API is intended for a trusted local machine and has no authentication."),
-    openapi_tags=[{"name": name} for name in ("Ingestion", "Jobs", "Sources", "Notes", "Health")],
+    openapi_tags=[{"name": name} for name in ("Ingestion", "Jobs", "Sources", "Notes", "Intelligence", "Graph", "Health")],
 )
 
 
@@ -85,10 +94,11 @@ class UploadSizeLimit:
 
 app.add_middleware(UploadSizeLimit)
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins,
-                   allow_methods=["GET", "POST"], allow_headers=["Content-Type"],
+                   allow_methods=["GET", "POST", "PATCH", "DELETE"], allow_headers=["Content-Type"],
                    expose_headers=["Content-Disposition"])
 app.include_router(ingest.router)
 app.include_router(jobs.router)
+app.include_router(intelligence.router)
 
 
 @app.get("/health", tags=["Health"], response_model=HealthResponse,

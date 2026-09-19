@@ -179,3 +179,46 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Quiet document typography, aligned with the note title and metadata. */
+.note-editor .bn-editor {
+  padding-inline: 0;
+  background: transparent;
+  color: var(--foreground);
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.75;
+}
+.note-editor .bn-block-content {
+  padding-block: 4px;
+}
+.note-editor .bn-block-content[data-content-type="heading"] {
+  margin-top: 1.15em;
+  margin-bottom: 0.3em;
+  letter-spacing: -0.025em;
+  line-height: 1.3;
+}
+.note-editor .bn-block-content[data-content-type="quote"] {
+  border-left: 3px solid var(--border);
+  padding-left: 1em;
+  color: var(--muted-foreground);
+}
+.note-editor .bn-inline-content {
+  overflow-wrap: anywhere;
+}
+.note-editor .note-mention {
+  color: var(--primary);
+  background: color-mix(in oklch, var(--primary) 8%, transparent);
+  border-bottom: 1px solid color-mix(in oklch, var(--primary) 38%, transparent);
+  border-radius: 3px;
+  cursor: pointer;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  transition: background-color 120ms ease;
+}
+.note-editor .note-mention:hover,
+.note-editor .note-mention:focus-visible {
+  background: color-mix(in oklch, var(--primary) 17%, transparent);
+  outline: 2px solid color-mix(in oklch, var(--primary) 35%, transparent);
+  outline-offset: 2px;
+}

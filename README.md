@@ -1,15 +1,22 @@
-# Zettelkasten ingestion backend
+# Zettelkasten
 
 Upload **PDF, audio, or video**, extract its text, and store it in PostgreSQL. Audio and video use FFmpeg plus local Whisper (`faster-whisper`). The API includes interactive Swagger UI for frontend integration.
 
-This phase ends at text/transcript storage. A Next.js frontend provides uploads, job status, notes, transcripts, media playback, and a graph of real notes. Automatic linking, embedding, summarization, and local LLM processing are deferred.
+The Next.js frontend provides uploads, editable notes, drafts, transcripts, media playback, and a graph of real connections. After transcription, a separate local Ollama worker summarizes the original source and links notes through shared concepts. LLM errors do not interrupt ingestion or editing.
 
 ## Start
 
-Requires Docker with Compose. From this repository:
+Requires Docker with Compose and Ollama running on the host. Install the local models once:
 
 ```bash
-cp .env.example .env
+ollama pull qwen2.5:7b
+ollama pull nomic-embed-text
+```
+
+Start the Ollama app (or `ollama serve` if it is not already running). From this repository:
+
+```bash
+cp -n .env.example .env
 docker compose up -d --build
 ```
 
@@ -48,7 +55,12 @@ Audio/video → FFmpeg → local Whisper ──┤
 2. The database-backed worker extracts/transcribes it asynchronously.
 3. `GET /jobs/{source_id}` reports `queued`, `processing`, `done`, or `failed`.
 4. `GET /sources/{source_id}/transcript` returns stored text and media metadata.
-5. `GET /notes` and `GET /notes/{note_id}` expose one note per successful upload.
+5. `GET /notes` and `GET /notes/{note_id}` expose one editable note per successful upload.
+6. The independent intelligence worker discovers new and existing transcripts and indexes them.
+7. `GET /notes/{note_id}/intelligence` reports indexing status, a separate AI summary, and related notes.
+8. `GET /graph` returns stored edges; the UI updates automatically.
+
+Existing notes are indexed automatically when intelligence is enabled. This adds derived records without rewriting titles, transcripts, saved edits, or Markdown exports. Set `ZK_INTELLIGENCE_ENABLED=false` to run ingestion and editing without Ollama. There is no semantic-search endpoint yet. See [the intelligence design and validation guide](backend/INTELLIGENCE.md).
 
 PDFs must contain selectable text. Image-only/scanned PDFs need OCR, which is outside this version. Pasted text, `.txt`, Markdown, and Word uploads are not accepted.
 

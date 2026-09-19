@@ -1,13 +1,13 @@
 # Backend and frontend integration
 
-FastAPI + PostgreSQL + FFmpeg + local Whisper. The supported inputs are **PDF, audio, and video**. Processing ends after text is stored in the database. Linking and local LLM processing are deferred.
+FastAPI + PostgreSQL + FFmpeg + local Whisper. The supported inputs are **PDF, audio, and video**. After text is stored, a separate durable worker performs local Ollama analysis and concept-based linking. See [INTELLIGENCE.md](INTELLIGENCE.md) for model setup, indexing, retries, and validation.
 
 ## Run with Docker
 
 From the repository root:
 
 ```bash
-cp .env.example .env
+cp -n .env.example .env
 docker compose up -d --build
 docker compose logs -f api
 ```
@@ -33,6 +33,11 @@ The default multilingual Whisper model is `base`, running on CPU with int8. Mode
 | GET | `/notes?limit=50&offset=0` | Note metadata, newest first |
 | GET | `/notes/{note_id}` | Note metadata, content, and saved editor blocks |
 | POST | `/notes/{note_id}` | Save note content and editor blocks; original transcript is unchanged |
+| GET | `/notes/{note_id}/intelligence` | Indexing status, summary, concepts, and related notes |
+| POST | `/notes/{note_id}/intelligence/reindex` | Queue/retry original-transcript indexing; 202 |
+| POST | `/intelligence/backfill` | Queue notes with no prior indexing job; safe to repeat |
+| GET | `/intelligence/status` | Queue totals and intelligence worker health |
+| GET | `/graph` | All notes and deduplicated stored edges |
 | GET | `/health` | Database and worker availability; 200 or 503 |
 
 List endpoints return arrays, accept `limit` from 1–100, and use zero-based `offset`. Timestamps are ISO 8601 UTC; the frontend should render the user's timezone (HKT for Leon).
@@ -106,7 +111,7 @@ Aborting the browser request stops polling; it does not cancel a job already acc
 
 ## Storage and restart behavior
 
-PostgreSQL is authoritative for **new extracted/transcribed content**. The additive `transcripts` table stores content, language, duration, segments, model, and creation time. Existing `sources`, `notes`, and `links` tables and data are retained. The pgvector image/extension remains for compatibility with the existing note schema; this version computes no embeddings or links. No existing notes are rewritten or backfilled.
+PostgreSQL is authoritative for **new extracted/transcribed content**. The additive `transcripts` table stores content, language, duration, segments, model, and creation time. Existing `sources`, `notes`, and `links` tables and data are retained. The pgvector extension also stores concept embeddings. Additive intelligence tables index existing transcripts without rewriting the notes. AI summaries and relations are separate from user content.
 
 Files are stored as:
 
@@ -118,7 +123,7 @@ notes/<source_id>.md           same text with YAML title/source metadata
 
 Within Docker this is `/data/zettelkasten` in the existing `zk-data` named volume. To use an ordinary host folder as an Obsidian vault, replace that volume mapping with an absolute host bind mount, for example `/Users/you/MyVault:/data/zettelkasten`. Existing named-volume files are not copied automatically. Local Python defaults to `~/zettelkasten`. Editing a Markdown export does not sync edits back into the database. Notes edited through the UI are saved in the additive `note_documents` table and update the note Markdown export; original transcripts remain unchanged.
 
-There is one sequential worker embedded in the API process. PostgreSQL holds the queue; queued or interrupted jobs are picked up after restart. A PostgreSQL advisory lock rejects a second API process using the same database. **Run one Uvicorn worker and one API instance**. The worker uses threads for blocking PDF/FFmpeg/Whisper processing, so polling stays responsive. Successful transcript, note metadata, and job completion are committed together. Stable note IDs avoid duplicate results on recovery. Temporary WAV files are removed after success or failure. Interrupted jobs may be transcribed again.
+There is one sequential ingestion worker and one independent sequential intelligence worker embedded in the API process. PostgreSQL holds the queue; queued or interrupted jobs are picked up after restart. A PostgreSQL advisory lock rejects a second API process using the same database. **Run one Uvicorn worker and one API instance**. The worker uses threads for blocking PDF/FFmpeg/Whisper processing, so polling stays responsive. Successful transcript, note metadata, and job completion are committed together. Stable note IDs avoid duplicate results on recovery. Temporary WAV files are removed after success or failure. Interrupted jobs may be transcribed again.
 
 Shutdown attempts to finish current processing. Docker allows 30 seconds before terminating; unfinished jobs recover on next startup. Keep PostgreSQL and file volumes together when backing up. `docker compose down` preserves volumes; `docker compose down -v` deletes them.
 
@@ -145,6 +150,14 @@ Copy the root `.env.example` to `.env`. For local Python, settings load `.env` f
 | `ZK_FFMPEG_TIMEOUT_SECONDS` | 600 | Audio extraction timeout |
 | `ZK_CORS_ORIGINS` | localhost ports 3000/5173 | JSON array of allowed frontend origins |
 | `ZK_WORKER_POLL_SECONDS` | 1 | Database queue polling interval |
+| `ZK_INTELLIGENCE_ENABLED` | true | Run background indexing, including existing transcripts |
+| `ZK_OLLAMA_BASE_URL` | localhost:11434 (Compose: host.docker.internal:11434) | Local model server |
+| `ZK_LLM_MODEL` | qwen2.5:7b | Summary/concept model |
+| `ZK_EMBED_MODEL` | nomic-embed-text | Must output 768 dimensions |
+| `ZK_INTELLIGENCE_CHUNK_CHARS` | 3000 | Split all source text into bounded chunks |
+| `ZK_INTELLIGENCE_TIMEOUT_SECONDS` | 180 | Per-model-request timeout |
+| `ZK_INTELLIGENCE_RELATION_THRESHOLD` | 0.75 | Minimum shared-concept relation score |
+| `ZK_INTELLIGENCE_SEMANTIC_THRESHOLD` | 0.92 | Conservative same-concept vector matching |
 
 Compose passes the commonly changed settings shown in its `environment` block. Add other settings to that block to override them in Docker. With the configured limits, media conversion may temporarily use roughly 230 MB for a two-hour mono WAV; allow disk space for originals, exports, and model weights.
 
@@ -154,7 +167,7 @@ Python 3.11 is the tested runtime. Install FFmpeg on the host and start PostgreS
 
 ```bash
 # Run from the repository root.
-cp .env.example .env
+cp -n .env.example .env
 docker compose up -d db
 python3.11 -m venv .venv
 .venv/bin/python -m pip install -r backend/requirements-dev.txt
@@ -176,3 +189,13 @@ ZK_TEST_ADMIN_URL=postgresql://zk:zk@localhost:5433/postgres \
 The test database role needs `CREATEDB`. Tests use a temporary storage directory and never clear the application database. They cover actual PDF parsing and database persistence, upload validation, retries, recovery, CORS, OpenAPI, and responsive polling. Media inference is stubbed in the fast integration suite; real FFmpeg/Whisper smoke testing is a separate runtime check.
 
 Technical references: [FastAPI file uploads](https://fastapi.tiangolo.com/tutorial/request-files/), [faster-whisper](https://github.com/SYSTRAN/faster-whisper).
+
+### Note management
+
+- `PATCH /notes/{id}` with `{ "title": "New title" }` renames a note and its
+  Markdown title metadata without changing content, blocks, or the source.
+  Titles are trimmed, limited to 200 characters, and cannot contain control characters.
+- `DELETE /notes/{id}` removes the note, Markdown export, saved document,
+  intelligence job/result, and incoming/outgoing links. Original source files and
+  transcripts are retained. Missing notes return 404. Background intelligence
+  work checks the note still exists before persisting results.

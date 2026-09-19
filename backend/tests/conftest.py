@@ -17,6 +17,7 @@ data = tempfile.TemporaryDirectory(prefix="zk-tests-")
 os.environ["ZK_DATABASE_URL"] = test_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 os.environ["ZK_DATA_DIR"] = data.name
 os.environ["ZK_WORKER_POLL_SECONDS"] = "0.02"
+os.environ["ZK_INTELLIGENCE_ENABLED"] = "false"  # Tests opt in with a deterministic model fixture.
 
 
 @pytest.fixture(scope="session", autouse=True)

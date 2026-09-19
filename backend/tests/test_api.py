@@ -197,7 +197,7 @@ def test_docs_cors_pagination_and_missing_records(client):
     assert client.get("/docs").status_code == 200
     schema = client.get("/openapi.json").json()
     assert "202" in schema["paths"]["/ingest"]["post"]["responses"]
-    assert "/graph" not in schema["paths"] and "/search" not in schema["paths"]
+    assert "/graph" in schema["paths"] and "/notes/{note_id}/intelligence" in schema["paths"]
     for path in ("/jobs/missing", "/sources/missing", "/sources/missing/transcript", "/notes/missing"):
         assert client.get(path).status_code == 404
     assert client.get("/sources?limit=0").status_code == 422

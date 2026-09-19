@@ -14,7 +14,8 @@ import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
-import type { Note } from "@/lib/api";
+import type { GraphEdge, Note } from "@/lib/api";
+import { buildGraph } from "@/lib/graph";
 import { NotesCard } from "@/components/notes-panel/notes-card";
 
 type GraphNode = {
@@ -66,19 +67,15 @@ function resolveColors(themeClass?: string) {
   };
 }
 
-export default function GraphCanvas({ notes }: { notes: Note[] }) {
+export default function GraphCanvas({
+  notes,
+  edges,
+}: {
+  notes: Note[];
+  edges: GraphEdge[];
+}) {
   const router = useRouter();
-  const graph = useMemo(
-    () => ({
-      nodes: notes.map((note) => ({
-        id: note.id,
-        label: note.title,
-        degree: 0,
-      })),
-      links: [] as GraphLink[],
-    }),
-    [notes],
-  );
+  const graph = useMemo(() => buildGraph(notes, edges), [notes, edges]);
   const notePreviews = useMemo(
     () =>
       Object.fromEntries(
@@ -165,7 +162,7 @@ export default function GraphCanvas({ notes }: { notes: Note[] }) {
           d3AlphaDecay={0.03}
           d3VelocityDecay={0.35}
           onEngineStop={() => {
-            fgRef.current?.zoomToFit(600, 80);
+            fgRef.current?.zoomToFit(600, 140);
           }}
           onZoom={({ k }) => {
             setZoomLevel(Math.round(k * 100));
@@ -254,7 +251,7 @@ export default function GraphCanvas({ notes }: { notes: Note[] }) {
           size="icon"
           variant="gradient_primary"
           aria-label="Fit graph"
-          onClick={() => fgRef.current?.zoomToFit(150, 80)}
+          onClick={() => fgRef.current?.zoomToFit(150, 140)}
         >
           <Maximize />
         </Button>

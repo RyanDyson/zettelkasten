@@ -1,17 +1,20 @@
 import asyncio
 import mimetypes
+import json
+import re
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse, PlainTextResponse
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 
 from ..db import SessionLocal
 from ..models import JobStatus, Note, NoteDocument, Source, Transcript
-from ..pipeline.core import write_note
+from ..pipeline.core import atomic_write, write_note
+from ..note_layout import source_blocks
 from ..schemas import (AcceptedJob, ErrorResponse, JobDetail, NoteDetail, NoteSummary,
-                       SourceDetail, SourceSummary, TranscriptResponse, NoteUpdate)
+                       SourceDetail, SourceSummary, TranscriptResponse, NoteUpdate, NoteRename, NoteDeleted)
 
 router = APIRouter(responses={404: {"model": ErrorResponse, "description": "Record not found"}})
 Limit = Annotated[int, Query(ge=1, le=100)]
@@ -138,7 +141,9 @@ async def get_note(note_id: str):
                 content = await asyncio.to_thread(Path(note.path).read_text, encoding="utf-8")
             except OSError:
                 raise HTTPException(404, "Legacy note file is unavailable.")
-        return NoteDetail(**NoteSummary.model_validate(note).model_dump(), content=content)
+        source = await session.get(Source, note.source_id) if note.source_id else None
+        initial_blocks = source_blocks(content, source.kind) if transcript and source else None
+        return NoteDetail(**NoteSummary.model_validate(note).model_dump(), content=content, blocks=initial_blocks)
 
 
 @router.post("/notes/{note_id}", tags=["Notes"], response_model=NoteDetail,
@@ -153,3 +158,60 @@ async def save_note(note_id: str, body: NoteUpdate):
         await session.commit()
         return NoteDetail(**NoteSummary.model_validate(note).model_dump(),
                           content=body.content, blocks=body.blocks)
+
+
+def renamed_markdown(original: str, title: str) -> str:
+    """Change only the title metadata; preserve the note body and other metadata."""
+    title_line = "title: " + json.dumps(title, ensure_ascii=False)
+    if original.startswith("---\n") and "\n---\n" in original[4:]:
+        header, body = original[4:].split("\n---\n", 1)
+        if re.search(r"^title:.*$", header, flags=re.MULTILINE):
+            header = re.sub(r"^title:.*$", lambda _: title_line, header, count=1, flags=re.MULTILINE)
+        else:
+            header = title_line + "\n" + header
+        return "---\n" + header + "\n---\n" + body
+    return "---\n" + title_line + "\n---\n\n" + original
+
+
+@router.patch("/notes/{note_id}", tags=["Notes"], response_model=NoteSummary,
+              summary="Rename a note without changing its content or original source")
+async def rename_note(note_id: str, body: NoteRename):
+    async with SessionLocal() as session:
+        note = await session.scalar(select(Note).where(Note.id == note_id).with_for_update())
+        if note is None:
+            raise HTTPException(404, "Note not found.")
+        path = Path(note.path)
+        original = await asyncio.to_thread(path.read_text, encoding="utf-8") if path.is_file() else None
+        try:
+            if original is not None:
+                await asyncio.to_thread(atomic_write, path, renamed_markdown(original, body.title))
+            note.title = body.title
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            if original is not None:
+                await asyncio.to_thread(atomic_write, path, original)
+            raise
+        return NoteSummary.model_validate(note)
+
+
+@router.delete("/notes/{note_id}", tags=["Notes"], response_model=NoteDeleted,
+               summary="Delete a note and its connections, retaining the original source and transcript")
+async def delete_note(note_id: str):
+    async with SessionLocal() as session:
+        note = await session.scalar(select(Note).where(Note.id == note_id).with_for_update())
+        if note is None:
+            raise HTTPException(404, "Note not found.")
+        path = Path(note.path)
+        original = await asyncio.to_thread(path.read_bytes) if path.is_file() else None
+        try:
+            # Foreign-key cascades remove saved edits, indexing jobs, and both kinds of links.
+            await session.execute(delete(Note).where(Note.id == note_id))
+            await asyncio.to_thread(path.unlink, missing_ok=True)
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            if original is not None and not path.exists():
+                await asyncio.to_thread(path.write_bytes, original)
+            raise
+    return NoteDeleted(id=note_id)
