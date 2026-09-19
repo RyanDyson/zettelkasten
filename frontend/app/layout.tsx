@@ -28,7 +28,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <AppSidebar />
           <SidebarInset className="flex min-h-dvh flex-1 max-h-screen flex-col">
             <NavCommand />
-            <SiteHeader />
+            {/* <SiteHeader /> */}
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               {children}
             </div>

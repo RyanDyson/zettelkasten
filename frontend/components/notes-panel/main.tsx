@@ -24,20 +24,17 @@ export function NotesLayout({ children }: { children: React.ReactNode }) {
       <aside
         className={`${selected ? "hidden md:flex" : "flex"} min-h-0 w-full flex-col border-r md:w-72 md:shrink-0`}
       >
-        <div className="border-b p-4">
+        <div className="border-b p-2">
           <label className="relative block">
-            <Search className="absolute top-2.5 left-3 size-3.5 text-muted-foreground" />
+            <Search className="absolute top-2.5 text-primary left-3 size-3.5" />
             <Input
               aria-label="Search note titles"
               placeholder="Search note titles…"
-              className="pl-9"
+              className="pl-9 text-primary bg-linear-to-b from-primary/10 to-primary/20 border border-primary/30"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
           </label>
-          <p className="mt-3 text-xs text-muted-foreground">
-            {filtered?.length ?? 0} notes
-          </p>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           {notes.isPending && <LoadingState>Loading notes…</LoadingState>}
@@ -66,6 +63,9 @@ export function NotesLayout({ children }: { children: React.ReactNode }) {
             </p>
           )}
         </div>
+        <p className="mb-3 text-xs text-center text-muted-foreground">
+          {filtered?.length ?? 0} notes
+        </p>
       </aside>
       <div
         className={`${selected ? "flex" : "hidden md:flex"} min-h-0 min-w-0 flex-1 flex-col`}

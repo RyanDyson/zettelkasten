@@ -25,6 +25,8 @@ const NO_MENTIONS: ConceptMention[] = [];
 
 export type EditedNote = { content: string; blocks: Block[] };
 
+const AUTOSAVE_MS = 1500;
+
 export default function NoteEditor({
   noteId,
   content,
@@ -164,10 +166,32 @@ export default function NoteEditor({
       setError(
         error instanceof Error ? error.message : "Could not save this note.",
       );
+      if (noteDrafts.getSnapshot().drafts[noteId]) {
+        // Changes happened while saving failed; retry shortly.
+        setTimeout(() => void save(), AUTOSAVE_MS);
+      }
     } finally {
       setSaving(false);
     }
   }
+
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  const draft = drafts[noteId];
+  useEffect(() => {
+    if (!onSave || !draft) return;
+    const timer = setTimeout(() => void saveRef.current(), AUTOSAVE_MS);
+    return () => clearTimeout(timer);
+  }, [onSave, noteId, draft]);
+
+  useEffect(() => {
+    if (!onSave || !dirty) return;
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => window.removeEventListener("beforeunload", beforeUnload);
+  }, [onSave, dirty]);
 
   return (
     <div className="space-y-4">
@@ -212,9 +236,9 @@ export default function NoteEditor({
             <span role="status">
               {saving
                 ? "Saving…"
-                : dirty
-                  ? "Editing · Draft kept in this tab"
-                  : "Saved"}
+                : dirty || error
+                  ? "Auto-saving…"
+                  : "All changes saved"}
             </span>
             <Button
               variant="gradient_primary"
