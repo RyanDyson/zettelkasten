@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     intelligence_similarity_threshold: float = 0.80
     intelligence_keyword_limit: int = 25
     intelligence_wordcloud_limit: int = 75
-    intelligence_relation_threshold: float = 0.82
+    intelligence_relation_threshold: float = 0.72
 
     class Config:
         env_prefix = "ZK_"

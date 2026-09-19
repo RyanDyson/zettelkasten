@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..config import settings
 from .embedder import get_vector
 from .hybrid_linker import fetch_candidate_note_relations, resolve_canonical_concept
-from .summarizer import generate_summary_and_keywords
+from .summarizer import generate_concepts_from_summary, generate_summary_and_keywords
 from .wordcloud import compute_tf_idf
 
 _WIKILINK_RE = re.compile(r"\[\[[^\]]+\]\]")
@@ -24,17 +24,24 @@ def _replace_best_phrase_once(text: str, phrase: str, target_title: str) -> tupl
     return text, False
 
 
-def _relation_confidence(shared_concepts: int, concept_count: int, avg_concept_conf: float) -> float:
+def _relation_confidence(
+    shared_concepts: int,
+    concept_count: int,
+    avg_matched_conf: float,
+    avg_matched_score: float,
+) -> float:
     if concept_count <= 0:
         return 0.0
     overlap_ratio = shared_concepts / concept_count
-    raw = 0.7 * overlap_ratio + 0.3 * avg_concept_conf
+    raw = 0.55 * overlap_ratio + 0.30 * avg_matched_conf + 0.15 * avg_matched_score
     return max(0.0, min(1.0, raw))
 
 
 async def run_intelligence_pipeline(raw_text: str, db_conn: AsyncSession) -> dict:
     analysis = await generate_summary_and_keywords(raw_text)
-    concepts = analysis.get("concepts", [])
+    ai_note_summary = analysis.get("summary", "").strip()
+    summary_concepts = await generate_concepts_from_summary(ai_note_summary)
+    concepts = summary_concepts or analysis.get("concepts", [])
 
     resolved_concepts: list[dict] = []
     for concept in concepts:
@@ -70,13 +77,24 @@ async def run_intelligence_pipeline(raw_text: str, db_conn: AsyncSession) -> dic
     concept_names = [c["canonical"] for c in resolved_concepts if c.get("canonical")]
     candidate_relations = await fetch_candidate_note_relations(db_conn, concept_names, top_k=20)
 
-    avg_conf = (
-        sum(c.get("ai_confidence", 0.5) for c in resolved_concepts) / max(len(resolved_concepts), 1)
-    )
+    concept_lookup = {c["canonical"].lower(): c for c in resolved_concepts if c.get("canonical")}
     relations: list[dict] = []
     for relation in candidate_relations:
         shared = int(relation["shared_concepts"])
-        confidence = _relation_confidence(shared, max(len(concept_names), 1), avg_conf)
+        matched = [m for m in relation["matched_concepts"] if isinstance(m, str)]
+        matched_records = [concept_lookup[m.lower()] for m in matched if m.lower() in concept_lookup]
+        avg_matched_conf = (
+            sum(c.get("ai_confidence", 0.5) for c in matched_records) / max(len(matched_records), 1)
+        )
+        avg_matched_score = (
+            sum(c.get("match_score", 0.5) for c in matched_records) / max(len(matched_records), 1)
+        )
+        confidence = _relation_confidence(
+            shared,
+            max(len(concept_names), 1),
+            avg_matched_conf,
+            avg_matched_score,
+        )
         if confidence < settings.intelligence_relation_threshold:
             continue
         relations.append(
@@ -91,7 +109,7 @@ async def run_intelligence_pipeline(raw_text: str, db_conn: AsyncSession) -> dic
     relations.sort(key=lambda r: r["confidence"], reverse=True)
     top_relation = relations[0] if relations else None
 
-    linked_text = raw_text
+    linked_text = ai_note_summary or raw_text
     hyperlink_events: list[dict] = []
     if top_relation:
         matched = set(c.lower() for c in top_relation["matched_concepts"])
@@ -107,6 +125,12 @@ async def run_intelligence_pipeline(raw_text: str, db_conn: AsyncSession) -> dic
                 if score > best_score:
                     best_score = score
                     best_mention = mention
+
+        if not best_mention:
+            for concept in resolved_concepts:
+                if concept["canonical"].lower() in matched:
+                    best_mention = concept.get("source_canonical") or concept["canonical"]
+                    break
 
         if best_mention:
             linked_text, replaced = _replace_best_phrase_once(
@@ -125,17 +149,17 @@ async def run_intelligence_pipeline(raw_text: str, db_conn: AsyncSession) -> dic
 
     title = analysis.get("title") or "Untitled Note"
     tags = list(dict.fromkeys([title] + analysis.get("tags", [])))
-    word_frequencies = compute_tf_idf(raw_text)
-    doc_embedding = await get_vector(raw_text)
+    word_frequencies = compute_tf_idf(ai_note_summary or raw_text)
+    doc_embedding = await get_vector(ai_note_summary or raw_text)
 
     return {
         "contract_version": "intelligence.v2",
         "document": {
             "title": title,
-            "summary": analysis.get("summary", ""),
+            "summary": ai_note_summary,
             "tags": tags,
             "raw_text": raw_text,
-            "enriched_text": linked_text,
+            "summary_enriched_text": linked_text,
             "word_counts": word_frequencies,
             "embedding": doc_embedding,
         },
@@ -144,8 +168,10 @@ async def run_intelligence_pipeline(raw_text: str, db_conn: AsyncSession) -> dic
         "hyperlinks": hyperlink_events,
         "debug": {
             "concept_count": len(resolved_concepts),
+            "summary_concepts_count": len(summary_concepts),
             "candidate_relations": len(candidate_relations),
             "accepted_relations": len(relations),
             "top_relation_confidence": relations[0]["confidence"] if relations else 0.0,
+            "relation_threshold": settings.intelligence_relation_threshold,
         },
     }

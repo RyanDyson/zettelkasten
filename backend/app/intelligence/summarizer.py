@@ -5,7 +5,7 @@ import httpx
 
 from ..config import settings
 
-PROMPT = """You are building a personal knowledge vault from one media transcript.
+PROMPT = """You are a Zettelkasten note writer for a personal knowledge vault.
 Return ONLY valid JSON with this schema:
 {{
   "title": "document title",
@@ -23,6 +23,10 @@ Return ONLY valid JSON with this schema:
 
 Rules:
 - title should be concise and specific.
+- summary must be a well-structured note paragraph with clear flow, not a bullet list.
+- summary should reorganize noisy transcript phrasing into coherent prose while preserving meaning.
+- summary should surface the key idea first, then supporting details and tradeoffs.
+- prefer clear transitions between ideas so the note reads smoothly.
 - tags must be lowercase and hyphenated.
 - concepts should be deduplicated and ordered by importance.
 - mentions must be exact phrase candidates from transcript.
@@ -30,6 +34,29 @@ Rules:
 - no markdown or text outside JSON.
 
 TRANSCRIPT:
+{text}
+"""
+
+CONCEPT_PROMPT = """You are given a finalized note summary.
+Extract concept candidates ONLY from the summary text and return ONLY valid JSON:
+{{
+  "concepts": [
+    {{
+      "canonical": "normalized concept keyword",
+      "aliases": ["possible alternate names"],
+      "mentions": ["exact phrases copied from summary"],
+      "confidence": 0.0
+    }}
+  ]
+}}
+
+Rules:
+- concepts must come from the summary only.
+- mentions must be exact phrases from the summary.
+- confidence is from 0.0 to 1.0.
+- no markdown or text outside JSON.
+
+SUMMARY:
 {text}
 """
 
@@ -99,25 +126,7 @@ def _fallback_analysis(raw_text: str) -> dict:
     }
 
 
-def _normalize_analysis(payload: dict, raw_text: str) -> dict:
-    title = str(payload.get("title", "")).strip() or "Untitled Note"
-    summary = str(payload.get("summary", "")).strip()
-
-    tags_in = payload.get("tags", [])
-    if not isinstance(tags_in, list):
-        tags_in = []
-    tags: list[str] = []
-    for tag in tags_in:
-        if not isinstance(tag, str):
-            continue
-        normalized = "-".join(tag.lower().strip().split())
-        if normalized and normalized not in tags:
-            tags.append(normalized)
-
-    concepts_in = payload.get("concepts", [])
-    if not isinstance(concepts_in, list):
-        concepts_in = []
-
+def _normalize_concepts(concepts_in: list) -> list[dict]:
     concepts: list[dict] = []
     seen = set()
     for concept in concepts_in:
@@ -155,6 +164,28 @@ def _normalize_analysis(payload: dict, raw_text: str) -> dict:
         seen.add(key)
         if len(concepts) >= settings.intelligence_keyword_limit:
             break
+    return concepts
+
+
+def _normalize_analysis(payload: dict, raw_text: str) -> dict:
+    title = str(payload.get("title", "")).strip() or "Untitled Note"
+    summary = str(payload.get("summary", "")).strip()
+
+    tags_in = payload.get("tags", [])
+    if not isinstance(tags_in, list):
+        tags_in = []
+    tags: list[str] = []
+    for tag in tags_in:
+        if not isinstance(tag, str):
+            continue
+        normalized = "-".join(tag.lower().strip().split())
+        if normalized and normalized not in tags:
+            tags.append(normalized)
+
+    concepts_in = payload.get("concepts", [])
+    if not isinstance(concepts_in, list):
+        concepts_in = []
+    concepts = _normalize_concepts(concepts_in)
 
     if not concepts:
         return _fallback_analysis(raw_text)
@@ -200,3 +231,36 @@ async def generate_summary_and_keywords(raw_text: str) -> dict:
         return _fallback_analysis(raw_text)
 
     return _normalize_analysis(payload, raw_text)
+
+
+async def generate_concepts_from_summary(summary_text: str) -> list[dict]:
+    text = summary_text.strip()
+    if not text:
+        return []
+
+    try:
+        async with httpx.AsyncClient(timeout=120) as client:
+            resp = await client.post(
+                f"{settings.ollama_base_url}/api/generate",
+                json={
+                    "model": settings.llm_model,
+                    "prompt": CONCEPT_PROMPT.format(text=text[:_MAX_PROMPT_CHARS]),
+                    "stream": False,
+                    "format": "json",
+                    "options": {"temperature": 0, "num_predict": 300, "num_ctx": 2048},
+                },
+            )
+            resp.raise_for_status()
+            body = resp.json()
+            payload = _parse_json_payload(body.get("response", ""))
+            if payload is None:
+                payload = _parse_json_payload(body.get("thinking", ""))
+            if payload is None:
+                return []
+    except Exception:
+        return []
+
+    concepts_in = payload.get("concepts", [])
+    if not isinstance(concepts_in, list):
+        return []
+    return _normalize_concepts(concepts_in)

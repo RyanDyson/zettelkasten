@@ -74,7 +74,7 @@ async def process(source_id: str) -> None:
         note_path = write_note(
             note_id,
             title,
-            doc["enriched_text"],
+            doc["summary_enriched_text"],
             tags,
             source_id,
         )

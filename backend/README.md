@@ -31,7 +31,7 @@ The intelligence payload shape:
     "summary": "...",
     "tags": ["..."],
     "raw_text": "...",
-    "enriched_text": "...",
+    "summary_enriched_text": "...",
     "word_counts": {"keyword": 1.23},
     "embedding": [0.01, -0.02]
   },
@@ -56,7 +56,7 @@ The intelligence payload shape:
   ],
   "hyperlinks": [
     {
-      "phrase": "exact transcript phrase",
+      "phrase": "exact summary phrase",
       "target_title": "...",
       "confidence": 0.86
     }
@@ -76,6 +76,18 @@ Quick test (from `backend/`):
 python -m scripts.test_intelligence_pipeline
 ```
 
+Quick UI playground:
+
+- Open `http://localhost:8000/intelligence/playground`
+- Paste any text
+- Click `Run Intelligence`
+- JSON contract is shown on screen (same schema returned by `run_intelligence_pipeline`)
+
+React playground with live client logs:
+
+- Open `http://localhost:8000/intelligence/react-playground`
+- Shows request timeline, status codes, and full JSON response
+
 To test concept linking, insert canonical concepts first:
 
 ```sql
@@ -87,7 +99,7 @@ ON CONFLICT (canonical_name) DO NOTHING;
 High-confidence relation behavior:
 
 - No relation above threshold => no links created.
-- Relation threshold configured by `ZK_INTELLIGENCE_RELATION_THRESHOLD` (default `0.82`).
+- Relation threshold configured by `ZK_INTELLIGENCE_RELATION_THRESHOLD` (default `0.72`).
 - Hyperlink insertion uses only the most relevant phrase for top relation.
 
 ## Endpoints
