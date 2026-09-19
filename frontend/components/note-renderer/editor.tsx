@@ -194,7 +194,7 @@ export default function NoteEditor({
   }, [onSave, dirty]);
 
   return (
-    <div className="space-y-4">
+    <div className="w-full">
       {onSave && (
         <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
           <div className="flex flex-wrap items-center gap-2">
@@ -252,13 +252,17 @@ export default function NoteEditor({
         </div>
       )}
       {error && (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="mx-auto max-w-3xl text-sm text-destructive">
           {error}
         </p>
       )}
-      {notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
+      {notice && (
+        <p role="status" className="mx-auto max-w-3xl text-sm text-muted-foreground">
+          {notice}
+        </p>
+      )}
       {dirty && storageFailed && (
-        <p role="status" className="text-sm text-destructive">
+        <p role="status" className="mx-auto max-w-3xl text-sm text-destructive">
           Browser storage is unavailable. You can switch notes, but save before
           refreshing or closing this tab.
         </p>
@@ -268,7 +272,7 @@ export default function NoteEditor({
         theme="light"
         editable={!saving && !formatting && !preview}
         onChange={trackChanges}
-        className="note-editor min-h-48"
+        className="note-editor mx-auto min-h-48 max-w-3xl"
       />
       {preview && (
         <FormatPreview

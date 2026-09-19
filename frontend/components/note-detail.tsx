@@ -155,7 +155,7 @@ export function NoteDetailView({ id }: { id: string }) {
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <article className="mx-auto max-w-3xl px-2 pt-24 pb-8">
+        <article className="mx-auto w-[calc(100%-4rem)] max-w-[min(100%,90rem)] px-2 pt-24 pb-8">
           {source.error && (
             <ErrorState
               error={source.error}
