@@ -9,9 +9,8 @@ from sqlalchemy import (
     Enum,
     Float,
     ForeignKey,
-    Integer,
+    JSON,
     String,
-    Table,
     Text,
     UniqueConstraint,
 )
@@ -19,7 +18,7 @@ from sqlalchemy.orm import DeclarativeBase, relationship
 
 
 def new_id() -> str:
-    return uuid.uuid4().hex[:12]
+    return uuid.uuid4().hex
 
 
 def utcnow() -> datetime:
@@ -41,7 +40,7 @@ class Source(Base):
     __tablename__ = "sources"
 
     id = Column(String, primary_key=True, default=new_id)
-    kind = Column(String)  # video | audio | text
+    kind = Column(String)  # pdf | audio | video (text/video-audio retained for legacy rows)
     original_name = Column(String)
     raw_path = Column(String)
     transcript_path = Column(Text, nullable=True)
@@ -65,6 +64,20 @@ class Note(Base):
     source = relationship("Source", backref="notes")
 
 
+class Transcript(Base):
+    """Additive table: existing source/note/link tables are preserved."""
+
+    __tablename__ = "transcripts"
+
+    source_id = Column(String, ForeignKey("sources.id", ondelete="CASCADE"), primary_key=True)
+    content = Column(Text, nullable=False)
+    language = Column(String, nullable=True)
+    duration_seconds = Column(Float, nullable=True)
+    segments = Column(JSON, nullable=False, default=list)
+    model = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
 class Link(Base):
     __tablename__ = "links"
 
@@ -74,4 +87,3 @@ class Link(Base):
     kind = Column(String, default="similarity")  # similarity | tag
 
     __table_args__ = (UniqueConstraint("src_id", "dst_id", "kind"),)
-

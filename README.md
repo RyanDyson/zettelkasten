@@ -1,95 +1,41 @@
-# Zettelkasten
+# Zettelkasten ingestion backend
 
-Local-first Zettelkasten: ingest video/audio/text, transcribe it, and turn it into atomic, auto-linked notes — all running on your own machine.
+Upload **PDF, audio, or video**, extract its text, and store it in PostgreSQL. Audio and video use FFmpeg plus local Whisper (`faster-whisper`). The API includes interactive Swagger UI for frontend integration.
 
-## Architecture
+This phase ends at text/transcript storage. There is no automatic linking, embedding, summarization, or local LLM dependency. No frontend application is implemented.
 
-```mermaid
-flowchart LR
-  subgraph inputs["Inputs"]
-    video["Video"]
-    audio["Audio"]
-    text["Text / MD"]
-  end
+## Start
 
-  subgraph backend["Backend (FastAPI, always on)"]
-    api["REST API"]
-    queue["Job queue (background worker)"]
-    stt["Whisper STT (faster-whisper)"]
-    llm["Ollama (summarize to structured note)"]
-    embed["Ollama embeddings"]
-    linker["Linker: cosine similarity + tags"]
-  end
-
-  subgraph storage["Storage"]
-    files["Filesystem: raw media, transcripts.md, notes.md"]
-    db["Postgres + pgvector: metadata, embeddings, edges"]
-  end
-
-  fe["Next.js frontend (on demand)"]
-
-  video --> api
-  audio --> api
-  text --> api
-  api --> queue
-  queue --> stt --> llm --> embed --> linker
-  stt --> files
-  llm --> files
-  embed --> db
-  linker --> db
-  fe --> api
-  api --> db
-```
-
-## Key decisions
-
-- **Filesystem is the source of truth** for content (openable in Obsidian); Postgres only holds metadata, embeddings, and edges.
-- **One sequential worker** (asyncio) — no Celery, no Redis.
-- **Ollama** for both LLM (`qwen2.5:7b`) and embeddings (`nomic-embed-text`).
-- **Links** = cosine-similarity edges above a threshold + shared-tag edges, written both to the DB and as `[[wikilinks]]` into the note markdown.
-
-Storage layout:
-
-```text
-~/zettelkasten/
-  raw/<id>.<ext>          # original media
-  transcripts/<id>.md
-  notes/<id>.md           # frontmatter: title, tags, source_id, created
-```
-
-DB (Postgres + pgvector): `sources`, `notes` (path, title, tags, embedding), `links` (`src_id, dst_id, weight, kind`).
-
-## Repo layout
-
-```text
-backend/     FastAPI app, worker pipeline, Dockerfile
-front-end/   Next.js + shadcn/radix UI
-docker-compose.yml   postgres (pgvector) + ollama + api, restart: unless-stopped
-```
-
-## Running the backend
+Requires Docker with Compose. From this repository:
 
 ```bash
-docker compose up -d --build          # starts db, ollama, api
-docker compose exec ollama ollama pull qwen2.5:7b
-docker compose exec ollama ollama pull nomic-embed-text
+cp .env.example .env
+docker compose up -d --build
 ```
 
-API on http://localhost:8000 (docs at `/docs`). See `backend/README.md` for endpoint details.
+- **Swagger UI:** http://localhost:8000/docs
+- **OpenAPI schema:** http://localhost:8000/openapi.json
+- **Health:** http://localhost:8000/health
 
-## Running the frontend
+The example config maps PostgreSQL to local port **5433**. API port defaults to **8000**. Change these in `.env` if occupied. Whisper downloads its model on the first media job; that job can take longer and requires internet access. Later runs use the persistent model cache. No OpenAI API key is required.
 
-```bash
-cd front-end
-bun install
-bun run dev            # dev mode
-bun run build && bun run start   # production, on demand
+## Flow
+
+```text
+PDF ────────→ pypdf text extraction ───┐
+Audio/video → FFmpeg → local Whisper ──┤
+                                      ↓
+                          PostgreSQL transcript + note metadata
+                                      ↓
+                          Markdown transcript and note files
 ```
 
-## Pipeline
+1. `POST /ingest` accepts a multipart `file` and returns HTTP 202 with a source ID.
+2. The database-backed worker extracts/transcribes it asynchronously.
+3. `GET /jobs/{source_id}` reports `queued`, `processing`, `done`, or `failed`.
+4. `GET /sources/{source_id}/transcript` returns stored text and media metadata.
+5. `GET /notes` and `GET /notes/{note_id}` expose one note per successful upload.
 
-1. `POST /ingest` saves the file, inserts a `source`, enqueues the job.
-2. Video → `ffmpeg -vn` → audio → `faster-whisper` → `transcripts/<id>.md`.
-3. Transcript/text → Ollama with a JSON prompt: `{title, summary, key_concepts[], atomic_notes[]}` — each atomic note becomes its own `.md`.
-4. Embed each note (`nomic-embed-text`), store in pgvector.
-5. Link: cosine KNN above 0.75 + shared tags; append `[[wikilinks]]` to the markdown.
+PDFs must contain selectable text. Image-only/scanned PDFs need OCR, which is outside this version. Pasted text, `.txt`, Markdown, and Word uploads are not accepted.
+
+See [backend/README.md](backend/README.md) for the frontend example, API contract, configuration, storage, testing, and local development.
