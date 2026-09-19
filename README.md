@@ -2,7 +2,7 @@
 
 Upload **PDF, audio, or video**, extract its text, and store it in PostgreSQL. Audio and video use FFmpeg plus local Whisper (`faster-whisper`). The API includes interactive Swagger UI for frontend integration.
 
-This phase ends at text/transcript storage. There is no automatic linking, embedding, summarization, or local LLM dependency. No frontend application is implemented.
+This phase ends at text/transcript storage. A Next.js frontend provides uploads, job status, notes, transcripts, media playback, and a graph of real notes. Automatic linking, embedding, summarization, and local LLM processing are deferred.
 
 ## Start
 
@@ -18,6 +18,20 @@ docker compose up -d --build
 - **Health:** http://localhost:8000/health
 
 The example config maps PostgreSQL to local port **5433**. API port defaults to **8000**. Change these in `.env` if occupied. Whisper downloads its model on the first media job; that job can take longer and requires internet access. Later runs use the persistent model cache. No OpenAI API key is required.
+
+## Run the UI
+
+With the backend running, open a second terminal:
+
+```bash
+cd frontend
+bun install --frozen-lockfile
+bun run dev --hostname 127.0.0.1
+```
+
+Open **http://localhost:3000**. Choose **Uploads → Choose files**, wait for **Ready**, then open the source or find its note under **All notes**.
+
+See [frontend/README.md](frontend/README.md) for configuration, playback, exports, and stopping/restarting. The UI expects the API at `http://localhost:8000`; override `NEXT_PUBLIC_API_URL` in `frontend/.env.local` if needed.
 
 ## Flow
 

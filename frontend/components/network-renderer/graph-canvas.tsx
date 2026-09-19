@@ -13,126 +13,9 @@ import { Maximize, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Input } from "@/components/ui/input";
-import {
-  NotesCard,
-  type NotesCardProps,
-} from "@/components/notes-panel/notes-card";
-
-const previewData: Record<string, Omit<NotesCardProps, "notesId">> = {
-  inbox: {
-    title: "Inbox",
-    preview: "Unprocessed notes waiting to be triaged into the vault.",
-    date: new Date("2026-09-19"),
-  },
-  git: {
-    title: "Git and AutoGit",
-    preview: "Optional Git support: commit snapshots without lifting a finger.",
-    date: new Date("2026-04-17"),
-  },
-  "command-palette": {
-    title: "Command Palette",
-    preview: "Keyboard-first navigation for everything in the app.",
-    date: new Date("2026-04-17"),
-  },
-  properties: {
-    title: "Properties Panel",
-    preview: "Edit a note's frontmatter in a user-friendly way.",
-    date: new Date("2026-04-17"),
-  },
-  "note-list": {
-    title: "Note List",
-    preview: "Shows the subset of notes selected by the current section.",
-    date: new Date("2026-04-13"),
-  },
-  principles: {
-    title: "Principles",
-    preview: "Core principles that guide every design decision.",
-    date: new Date("2026-04-13"),
-  },
-  ai: {
-    title: "AI in Tolaria",
-    preview: "AI without requirement: pick a model or skip it entirely.",
-    date: new Date("2026-04-13"),
-  },
-  "bottom-bar": {
-    title: "Bottom Bar",
-    preview: "Vault path, sync status, and quick preferences at a glance.",
-    date: new Date("2026-04-13"),
-  },
-  projects: {
-    title: "Projects",
-    preview: "Type used to group notes that belong to a bigger effort.",
-    date: new Date("2026-04-12"),
-  },
-  people: {
-    title: "People",
-    preview: "Notes referencing the humans behind the ideas.",
-    date: new Date("2026-04-12"),
-  },
-  "daily-notes": {
-    title: "Daily Notes",
-    preview: "One scratchpad per day, auto-created at first launch.",
-    date: new Date("2026-04-11"),
-  },
-  templates: {
-    title: "Templates",
-    preview: "Reusable skeletons for notes, projects, and journaling.",
-    date: new Date("2026-04-11"),
-  },
-  search: {
-    title: "Search",
-    preview: "Full-text and metadata search across the whole vault.",
-    date: new Date("2026-04-10"),
-  },
-  tags: {
-    title: "Tags",
-    preview: "Loose, freeform tags attached to any note.",
-    date: new Date("2026-04-10"),
-  },
-  backlinks: {
-    title: "Backlinks",
-    preview: "Every incoming link to the note you are looking at.",
-    date: new Date("2026-04-09"),
-  },
-  "graph-view": {
-    title: "Graph View",
-    preview: "Force-directed map of the notes and their connections.",
-    date: new Date("2026-04-09"),
-  },
-  "git-sync": {
-    title: "Git Sync",
-    preview: "Push and pull without leaving the note editor.",
-    date: new Date("2026-04-09"),
-  },
-  attachments: {
-    title: "Attachments",
-    preview: "Images and files stored next to the notes that use them.",
-    date: new Date("2026-04-08"),
-  },
-  "keyboard-shortcuts": {
-    title: "Keyboard Shortcuts",
-    preview: "Remap every action; almost everything has a shortcut.",
-    date: new Date("2026-04-08"),
-  },
-  themes: {
-    title: "Themes",
-    preview: "Light and dark, plus community theme support.",
-    date: new Date("2026-04-08"),
-  },
-};
-
-const placeholder: Omit<NotesCardProps, "notesId"> = {
-  title: "Untitled note",
-  preview: "No preview available for this note yet.",
-  date: new Date(),
-};
-
-const notePreviews: Record<string, NotesCardProps> = Object.fromEntries(
-  Object.entries(previewData).map(([id, preview]) => [
-    id,
-    { ...preview, notesId: id },
-  ]),
-);
+import { useRouter } from "next/navigation";
+import type { Note } from "@/lib/api";
+import { NotesCard } from "@/components/notes-panel/notes-card";
 
 type GraphNode = {
   id: string;
@@ -142,7 +25,7 @@ type GraphNode = {
 
 type GraphLink = {
   source: string | GraphNode;
-  target: string;
+  target: string | GraphNode;
 };
 
 type NodeObject = GraphNode & { x?: number; y?: number };
@@ -154,86 +37,6 @@ function resolveVar(name: string, fallback: string): string {
     .trim();
   return value || fallback;
 }
-
-const nodeIds = [
-  "inbox",
-  "git",
-  "command-palette",
-  "properties",
-  "note-list",
-  "principles",
-  "ai",
-  "bottom-bar",
-  "projects",
-  "people",
-  "daily-notes",
-  "templates",
-  "search",
-  "tags",
-  "backlinks",
-  "graph-view",
-  "git-sync",
-  "attachments",
-  "keyboard-shortcuts",
-  "themes",
-];
-
-const linkPairs: [string, string][] = [
-  ["inbox", "git"],
-  ["inbox", "command-palette"],
-  ["inbox", "note-list"],
-  ["inbox", "daily-notes"],
-  ["git", "principles"],
-  ["git", "git-sync"],
-  ["command-palette", "principles"],
-  ["command-palette", "bottom-bar"],
-  ["command-palette", "keyboard-shortcuts"],
-  ["command-palette", "search"],
-  ["properties", "principles"],
-  ["properties", "note-list"],
-  ["properties", "templates"],
-  ["note-list", "principles"],
-  ["note-list", "graph-view"],
-  ["note-list", "search"],
-  ["principles", "ai"],
-  ["principles", "tags"],
-  ["principles", "backlinks"],
-  ["ai", "projects"],
-  ["ai", "people"],
-  ["ai", "tags"],
-  ["bottom-bar", "search"],
-  ["bottom-bar", "themes"],
-  ["search", "backlinks"],
-  ["search", "keyboard-shortcuts"],
-  ["graph-view", "backlinks"],
-  ["graph-view", "tags"],
-  ["templates", "daily-notes"],
-  ["templates", "attachments"],
-  ["tags", "themes"],
-  ["backlinks", "git-sync"],
-];
-
-function buildGraph(): { nodes: GraphNode[]; links: GraphLink[] } {
-  const degree = new Map<string, number>();
-  for (const id of nodeIds) degree.set(id, 0);
-  const links: GraphLink[] = [];
-  for (const [source, target] of linkPairs) {
-    degree.set(source, (degree.get(source) ?? 0) + 1);
-    degree.set(target, (degree.get(target) ?? 0) + 1);
-    links.push({ source, target });
-  }
-  const nodes: GraphNode[] = nodeIds.map((id) => ({
-    id,
-    label: id
-      .split("-")
-      .map((part) => part[0].toUpperCase() + part.slice(1))
-      .join(" "),
-    degree: degree.get(id) ?? 0,
-  }));
-  return { nodes, links };
-}
-
-const graph = buildGraph();
 
 function subscribeToThemeClass(callback: () => void) {
   const observer = new MutationObserver(() => {
@@ -263,7 +66,34 @@ function resolveColors(themeClass?: string) {
   };
 }
 
-export default function GraphCanvas() {
+export default function GraphCanvas({ notes }: { notes: Note[] }) {
+  const router = useRouter();
+  const graph = useMemo(
+    () => ({
+      nodes: notes.map((note) => ({
+        id: note.id,
+        label: note.title,
+        degree: 0,
+      })),
+      links: [] as GraphLink[],
+    }),
+    [notes],
+  );
+  const notePreviews = useMemo(
+    () =>
+      Object.fromEntries(
+        notes.map((note) => [
+          note.id,
+          {
+            notesId: note.id,
+            title: note.title,
+            preview: "Click to open this note",
+            date: new Date(note.created_at),
+          },
+        ]),
+      ),
+    [notes],
+  );
   const fgRef = useRef<ForceGraphMethods<NodeObject, GraphLink>>(
     null as unknown as ForceGraphMethods<NodeObject, GraphLink>,
   );
@@ -274,7 +104,7 @@ export default function GraphCanvas() {
   );
   const colors = useMemo(() => resolveColors(themeClass), [themeClass]);
 
-  const maxDegree = Math.max(...graph.nodes.map((n) => n.degree));
+  const maxDegree = Math.max(1, ...graph.nodes.map((n) => n.degree));
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -328,7 +158,8 @@ export default function GraphCanvas() {
           ref={fgRef}
           width={size.width}
           height={size.height}
-          graphData={{ nodes: [...graph.nodes], links: [...graph.links] }}
+          graphData={graph}
+          onNodeClick={(node) => router.push(`/notes/${node.id}`)}
           backgroundColor={colors.background}
           cooldownTicks={200}
           d3AlphaDecay={0.03}
@@ -439,7 +270,7 @@ export default function GraphCanvas() {
             top: mousePos.y + 16,
           }}
         >
-          <NotesCard {...(notePreviews[hoveredId] ?? placeholder)} />
+          <NotesCard {...notePreviews[hoveredId]} />
         </div>
       )}
     </div>

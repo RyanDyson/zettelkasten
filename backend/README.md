@@ -27,10 +27,12 @@ The default multilingual Whisper model is `base`, running on CPU with int8. Mode
 | POST | `/jobs/{source_id}/retry` | Requeue a failed job; 202, or 409 if not failed |
 | GET | `/sources?limit=50&offset=0&status=done` | Source metadata; optional status filter |
 | GET | `/sources/{source_id}` | Source metadata and transcript URL |
+| GET | `/sources/{source_id}/file` | Original uploaded file; supports byte ranges for media playback |
 | GET | `/sources/{source_id}/transcript` | Full text stored in PostgreSQL |
 | GET | `/sources/{source_id}/transcript/download` | Markdown attachment generated from database text |
 | GET | `/notes?limit=50&offset=0` | Note metadata, newest first |
-| GET | `/notes/{note_id}` | Note metadata and full content |
+| GET | `/notes/{note_id}` | Note metadata, content, and saved editor blocks |
+| POST | `/notes/{note_id}` | Save note content and editor blocks; original transcript is unchanged |
 | GET | `/health` | Database and worker availability; 200 or 503 |
 
 List endpoints return arrays, accept `limit` from 1–100, and use zero-based `offset`. Timestamps are ISO 8601 UTC; the frontend should render the user's timezone (HKT for Leon).
@@ -114,7 +116,7 @@ transcripts/<source_id>.md     plain extracted/transcribed text
 notes/<source_id>.md           same text with YAML title/source metadata
 ```
 
-Within Docker this is `/data/zettelkasten` in the existing `zk-data` named volume. To use an ordinary host folder as an Obsidian vault, replace that volume mapping with an absolute host bind mount, for example `/Users/you/MyVault:/data/zettelkasten`. Existing named-volume files are not copied automatically. Local Python defaults to `~/zettelkasten`. Editing a Markdown export does not sync edits back into the database.
+Within Docker this is `/data/zettelkasten` in the existing `zk-data` named volume. To use an ordinary host folder as an Obsidian vault, replace that volume mapping with an absolute host bind mount, for example `/Users/you/MyVault:/data/zettelkasten`. Existing named-volume files are not copied automatically. Local Python defaults to `~/zettelkasten`. Editing a Markdown export does not sync edits back into the database. Notes edited through the UI are saved in the additive `note_documents` table and update the note Markdown export; original transcripts remain unchanged.
 
 There is one sequential worker embedded in the API process. PostgreSQL holds the queue; queued or interrupted jobs are picked up after restart. A PostgreSQL advisory lock rejects a second API process using the same database. **Run one Uvicorn worker and one API instance**. The worker uses threads for blocking PDF/FFmpeg/Whisper processing, so polling stays responsive. Successful transcript, note metadata, and job completion are committed together. Stable note IDs avoid duplicate results on recovery. Temporary WAV files are removed after success or failure. Interrupted jobs may be transcribed again.
 

@@ -64,6 +64,15 @@ class Note(Base):
     source = relationship("Source", backref="notes")
 
 
+class NoteDocument(Base):
+    """User edits are separate from immutable extracted source transcripts."""
+
+    __tablename__ = "note_documents"
+    note_id = Column(String, ForeignKey("notes.id", ondelete="CASCADE"), primary_key=True)
+    content = Column(Text, nullable=False)
+    blocks = Column(JSON, nullable=True)
+
+
 class Transcript(Base):
     """Additive table: existing source/note/link tables are preserved."""
 

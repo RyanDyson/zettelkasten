@@ -1,36 +1,80 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Zettelkasten frontend
 
-## Getting Started
+Next.js UI connected to the FastAPI ingestion backend. Uses the existing sidebar, cards, blue accents, graph canvas, and Notes/Source tabs with real database content.
 
-First, run the development server:
+## Run locally
+
+Start Docker Desktop. From the repository root, start the API and database:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# First setup only; preserve an existing .env.
+cp -n .env.example .env
+docker compose up -d --build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+In another terminal:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+cd frontend
+bun install --frozen-lockfile
+# Optional: defaults to http://localhost:8000 without a config file.
+cp -n .env.example .env.local
+bun run dev --hostname 127.0.0.1
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Open **http://localhost:3000**. Use this exact hostname; the backend's default CORS settings allow `http://localhost:3000`. Opening `http://127.0.0.1:3000` instead requires adding that origin to `ZK_CORS_ORIGINS` in the root `.env` and recreating the API container.
 
-## Learn More
+Requires Bun (the repo declares Bun 1.3.9; tested with 1.3.10), Node.js 20.9 or newer, and Docker Compose. FFmpeg and PostgreSQL run inside Docker, so host installations are unnecessary. Swagger remains at **http://localhost:8000/docs**.
 
-To learn more about Next.js, take a look at the following resources:
+## Use the app
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Select **Uploads** or **Add source**.
+2. Choose files or drag them into the upload area. You can select multiple PDFs, audio files, and videos; each is uploaded separately.
+3. Upload history updates automatically: **Queued → Processing → Ready**, or **Failed**.
+4. Open a source to read extracted text, play its original audio/video, export Markdown, or retry failed processing.
+5. Open **All notes** to search note titles and select a saved note. The **Source & transcript** tab contains the original recording and timestamped transcript. Select **Show timestamps**, then click a segment to seek playback.
+6. The **Graph** displays the real notes. Click a node to open one. There are no generated links yet.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Unfinished notes move to the top of the left-hand lists with an **Editing** label. You can navigate freely: drafts, including formatting, stay in this browser tab and survive refreshes using session storage. Click **Save note** to persist them to the backend and remove the label; save before closing the tab. Browser drafts are not shared between tabs or devices.
 
-## Deploy on Vercel
+Refreshing the page reloads persisted records from the backend and restores any draft for the current tab. Notes use the BlockNote editor: edit text or formatting, then click **Save note**. Edits are stored in PostgreSQL separately from the original transcript, and remain after refreshing. The **Source & transcript** tab and its export still show the original extracted text. Deleting, archiving, folder management, and automatic linking are not implemented by this backend. The UI does not simulate those features or show invented connections. Search currently matches titles, not transcript contents.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+PDFs must contain selectable text (no OCR). Default backend limits are 100 MiB per file, 1,000 PDF pages, and two hours for media. Limits are enforced by the backend. Some accepted codecs/containers (such as MKV) cannot play in every browser; use **Original file** to open the recording in a compatible player. Transcription can still succeed even when the browser cannot play the source.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Configuration
+
+`frontend/.env.local`:
+
+```dotenv
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
+
+This is the URL the **browser** uses to reach FastAPI, not an internal Docker hostname. Restart Next.js after changing it; production builds must be rebuilt when it changes. If the API port changes, update this value. If the frontend port changes, also update the backend's `ZK_CORS_ORIGINS`. There are no database credentials in the frontend.
+
+Requests go directly to FastAPI, so file uploads do not pass through Next.js request-size limits. The frontend polls shared source and note queries and loads all pages of the backend's paginated lists. Job/transcript errors remain visible and can be retried.
+
+## Stop and restart
+
+- **Stop the UI:** press Ctrl+C in its terminal.
+- **Stop the backend:** run `docker compose stop` from the repository root.
+- **Resume:** run `docker compose up -d`, then `cd frontend && bun run dev --hostname 127.0.0.1`.
+- Database and upload volumes persist. Do not use `docker compose down -v` unless you intend to delete stored data.
+
+For a production build on your local machine:
+
+```bash
+bun run build
+bun run start --hostname 127.0.0.1
+```
+
+Run build/start instead of the development server, not at the same time on port 3000.
+
+## Checks
+
+```bash
+bun run lint
+bun test
+bun run build
+```
+
+API-client tests cover file validation, pagination, backend errors, connection failures, and multipart uploads. Backend tests also cover the original-file endpoint and byte-range requests used by media playback.

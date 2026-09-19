@@ -1,16 +1,37 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Plus } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
 
 export function SiteHeader() {
-  return (
-    <header className="bg-background/30 absolute z-30 flex h-(--header-height) w-full shrink-0 items-center gap-2 rounded-t-lg border-b backdrop-blur-2xl transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height)">
-      <div className="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
-        <SidebarTrigger className="-ml-1" />
-        <Separator
-          orientation="vertical"
-          className="mx-2 h-4 data-vertical:self-auto"
-        />
+  const path = usePathname();
+  if (path === "/") {
+    return (
+      <div className="pointer-events-none absolute top-3 left-3 z-30">
+        <SidebarTrigger className="pointer-events-auto bg-background/80 backdrop-blur-sm" />
       </div>
+    );
+  }
+  const title = path.startsWith("/notes")
+    ? "All notes"
+    : path.startsWith("/uploads")
+      ? "Uploads"
+      : "Knowledge graph";
+  return (
+    <header className="flex h-(--header-height) shrink-0 items-center gap-3 border-b px-4 md:px-6">
+      <SidebarTrigger />
+      <Separator orientation="vertical" className="h-4!" />
+      <span className="text-sm font-medium">{title}</span>
+      <Button asChild variant="gradient_primary" className="ml-auto">
+        <Link href="/uploads">
+          <Plus className="size-4" />
+          Add source
+        </Link>
+      </Button>
     </header>
   );
 }

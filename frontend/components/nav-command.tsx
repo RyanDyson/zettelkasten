@@ -88,8 +88,7 @@ export function NavCommand() {
               <MagnifyingGlassIcon className="size-4" />
               <p>No command found.</p>
               <p>
-                Try &quot;chat&quot;, &quot;finance&quot;, or &quot;new
-                expense&quot;.
+                Try &quot;notes&quot;, &quot;graph&quot;, or &quot;upload&quot;.
               </p>
             </div>
           </CommandEmpty>

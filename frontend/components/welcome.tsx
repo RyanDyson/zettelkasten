@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowUpRight, Droplet, FolderOpen, Plus } from "lucide-react";
+import { ArrowUpRight, FolderOpen, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {

@@ -1,7 +1,8 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from .config import settings
 
 from .models import JobStatus
 
@@ -26,6 +27,19 @@ class NoteSummary(BaseModel):
 
 class NoteDetail(NoteSummary):
     content: str
+    blocks: list[dict] | None = None
+
+
+class NoteUpdate(BaseModel):
+    content: str = Field(max_length=settings.max_text_chars)
+    blocks: list[dict] | None = Field(default=None, max_length=10000)
+
+    @field_validator("content")
+    @classmethod
+    def no_nul(cls, value: str) -> str:
+        if "\x00" in value:
+            raise ValueError("NUL characters are not supported")
+        return value
 
 
 class SourceSummary(BaseModel):

@@ -71,6 +71,23 @@ def test_pdf_end_to_end_and_database_source_of_truth(client):
     assert client.post(f"/jobs/{source_id}/retry").status_code == 409
 
 
+def test_original_file_and_byte_ranges(client):
+    payload = pdf_bytes()
+    source_id = upload(client, "original.pdf", payload)
+    assert wait_job(client, source_id)["status"] == "done"
+    url = f"/sources/{source_id}/file"
+    response = client.get(url)
+    assert response.status_code == 200
+    assert response.content == payload
+    assert response.headers["content-type"] == "application/pdf"
+    response = client.get(url, headers={"Range": "bytes=0-9"})
+    assert response.status_code == 206
+    assert response.content == payload[:10]
+    assert client.get("/sources/missing/file").status_code == 404
+    (RAW_DIR / f"{source_id}.pdf").unlink()
+    assert client.get(url).status_code == 404
+
+
 @pytest.mark.parametrize("filename,data,code", [
     ("notes.txt", b"apples", 415), ("notes.md", b"apples", 415),
     ("file.docx", b"data", 415), ("empty.pdf", b"", 400),
@@ -189,3 +206,23 @@ def test_docs_cors_pagination_and_missing_records(client):
     response = client.options("/ingest", headers={"Origin": "http://localhost:3000",
                                                "Access-Control-Request-Method": "POST"})
     assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+
+
+def test_note_edits_preserve_original_transcript(client):
+    source_id = upload(client, "editable.pdf", pdf_bytes())
+    assert wait_job(client, source_id)["status"] == "done"
+    original = client.get(f"/sources/{source_id}/transcript").json()
+    blocks = [{"id": "heading-one", "type": "heading", "props": {"level": 1},
+               "content": [{"type": "text", "text": "My apple notes", "styles": {}}], "children": []}]
+    edited = {"content": "# My apple notes\n", "blocks": blocks}
+    result = client.post(f"/notes/{source_id}", json=edited)
+    assert result.status_code == 200
+    stored = client.get(f"/notes/{source_id}").json()
+    assert stored["content"] == edited["content"]
+    assert stored["blocks"] == blocks
+    assert client.get(f"/sources/{source_id}/transcript").json() == original
+    assert "# My apple notes" in (NOTES_DIR / f"{source_id}.md").read_text()
+    assert client.post("/notes/missing", json=edited).status_code == 404
+    assert client.post(f"/notes/{source_id}", json={"content": "\u0000"}).status_code == 422
+    assert client.post(f"/notes/{source_id}", json={"content": "", "blocks": []}).status_code == 200
+    assert client.get(f"/notes/{source_id}").json()["content"] == ""
