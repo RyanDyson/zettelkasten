@@ -171,3 +171,32 @@ export type IntelligenceStatus = {
   counts: Record<JobStatus, number>;
   unindexed: number;
 };
+
+export type ChatProvider = {
+  id: string;
+  label: string;
+  kind: "local_llm" | "agent";
+  available: boolean;
+  models: string[];
+};
+export type ChatSession = {
+  id: string;
+  note_id: string | null;
+  title: string;
+  provider: string;
+  model: string | null;
+  created_at: string;
+};
+export type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+};
+export type ChatThread = { session: ChatSession; messages: ChatMessage[] };
+export type ChatProviders = { providers: ChatProvider[] };
+export type ChatReply = {
+  user_message: ChatMessage;
+  assistant_message: ChatMessage;
+  context_notes: string[];
+};

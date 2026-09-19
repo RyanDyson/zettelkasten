@@ -117,3 +117,86 @@ export function useIntelligenceStatus() {
     refetchInterval: 3000,
   });
 }
+
+export type ChatScope = { noteId?: string; enabled?: boolean };
+export function useChatProviders() {
+  return useQuery({
+    queryKey: ["chat-providers"],
+    queryFn: ({ signal }) =>
+      request<import("@/lib/api").ChatProviders>("/chat/providers", { signal }),
+    staleTime: 30_000,
+  });
+}
+export function useChatSessions(scope: ChatScope) {
+  const noteId = scope.noteId ?? null;
+  return useQuery({
+    queryKey: ["chat-sessions", noteId],
+    queryFn: ({ signal }) =>
+      request<import("@/lib/api").ChatSession[]>(
+        `/chat/sessions${noteId ? `?note_id=${encodeURIComponent(noteId)}` : ""}`,
+        { signal },
+      ),
+    enabled: scope.enabled !== false,
+  });
+}
+export function useChatThread(id: string | null) {
+  return useQuery({
+    queryKey: ["chat", id],
+    enabled: !!id,
+    queryFn: ({ signal }) =>
+      request<import("@/lib/api").ChatThread>(
+        `/chat/sessions/${encodeURIComponent(id!)}`,
+        { signal },
+      ),
+  });
+}
+export function useCreateChatSession() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { note_id?: string; provider: string; model?: string | null }) =>
+      request<import("@/lib/api").ChatSession>("/chat/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => void client.invalidateQueries({ queryKey: ["chat-sessions"] }),
+  });
+}
+export function useSendChatMessage() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { sessionId: string; content: string; provider?: string; model?: string | null }) =>
+      request<import("@/lib/api").ChatReply>(
+        `/chat/sessions/${encodeURIComponent(body.sessionId)}/messages`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: body.content,
+            provider: body.provider,
+            model: body.model,
+          }),
+        },
+      ),
+    onSuccess: async (reply, variables) => {
+      client.invalidateQueries({ queryKey: ["chat-sessions"] });
+      await client.invalidateQueries({ queryKey: ["chat", variables.sessionId] });
+    },
+  });
+}
+export function useDeleteChatSession() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      request<{ id: string; deleted: boolean }>(
+        `/chat/sessions/${encodeURIComponent(id)}`,
+        { method: "DELETE" },
+      ),
+    onSuccess: async (_, id) => {
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ["chat-sessions"] }),
+        client.removeQueries({ queryKey: ["chat", id] }),
+      ]);
+    },
+  });
+}

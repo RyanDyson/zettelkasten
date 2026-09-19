@@ -139,6 +139,27 @@ class NoteConcept(Base):
     mentions = Column(JSON, nullable=False, default=list)
 
 
+class ChatSession(Base):
+    """Additive table: persisted AI chat conversations per scope (graph or one note)."""
+
+    __tablename__ = "chat_sessions"
+    id = Column(String, primary_key=True, default=new_id)
+    note_id = Column(String, ForeignKey("notes.id", ondelete="CASCADE"), nullable=True)
+    title = Column(String, nullable=False, default="New chat")
+    provider = Column(String, nullable=False, default="ollama")
+    model = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+    id = Column(String, primary_key=True, default=new_id)
+    session_id = Column(String, ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    role = Column(String, nullable=False)  # user | assistant
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+
+
 class IntelligenceLink(Base):
     """One undirected pair, separate from legacy links and their existing constraints."""
     __tablename__ = "intelligence_links"
