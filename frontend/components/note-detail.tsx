@@ -14,6 +14,7 @@ const NoteEditor = dynamic(() => import("@/components/note-renderer/editor"), {
   loading: () => <LoadingState>Loading editor…</LoadingState>,
 });
 import { ErrorState, LoadingState } from "@/components/request-state";
+import { NoteConnections } from "@/components/note-connections";
 import { formatDate } from "@/lib/dates";
 
 export function NoteDetailView({ id }: { id: string }) {
@@ -85,6 +86,7 @@ export function NoteDetailView({ id }: { id: string }) {
                 queryClient.setQueryData(["note", id], saved);
               }}
             />
+            <NoteConnections id={id} />
           </div>
           {tab === "media" && source.data && transcript.data && (
             <MediaRenderer

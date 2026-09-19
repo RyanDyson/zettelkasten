@@ -127,3 +127,35 @@ export async function uploadFile(file: File): Promise<AcceptedJob> {
   form.append("file", file);
   return request<AcceptedJob>("/ingest", { method: "POST", body: form });
 }
+
+export type GraphEdge = {
+  src_id: string;
+  dst_id: string;
+  weight: number;
+  kind: string;
+  concepts: string[];
+};
+export type GraphData = { nodes: Note[]; edges: GraphEdge[] };
+export type Intelligence = {
+  note_id: string;
+  enabled: boolean;
+  status: "not_indexed" | JobStatus;
+  error: string | null;
+  summary: string | null;
+  concepts: string[];
+  related_notes: {
+    note_id: string;
+    title: string;
+    score: number;
+    concepts: string[];
+  }[];
+  indexed_at: string | null;
+  model: string | null;
+  chunk_count: number | null;
+};
+export type IntelligenceStatus = {
+  enabled: boolean;
+  worker: "running" | "stopped";
+  counts: Record<JobStatus, number>;
+  unindexed: number;
+};

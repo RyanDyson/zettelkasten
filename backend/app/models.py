@@ -10,6 +10,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     JSON,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -96,3 +97,52 @@ class Link(Base):
     kind = Column(String, default="similarity")  # similarity | tag
 
     __table_args__ = (UniqueConstraint("src_id", "dst_id", "kind"),)
+
+
+# Additive schema: none of master's tables, IDs, or edited note content changes.
+class IntelligenceJob(Base):
+    __tablename__ = "intelligence_jobs"
+    note_id = Column(String, ForeignKey("notes.id", ondelete="CASCADE"), primary_key=True)
+    status = Column(String, nullable=False, default="queued", index=True)
+    error = Column(Text, nullable=True)
+    attempts = Column(Integer, nullable=False, default=0)
+    queued_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class NoteIntelligence(Base):
+    __tablename__ = "note_intelligence"
+    note_id = Column(String, ForeignKey("notes.id", ondelete="CASCADE"), primary_key=True)
+    input_hash = Column(String, nullable=False)
+    model = Column(String, nullable=False)
+    embed_model = Column(String, nullable=False)
+    version = Column(String, nullable=False)
+    summary = Column(Text, nullable=False)
+    chunk_count = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class Concept(Base):
+    __tablename__ = "intelligence_concepts"
+    key = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    aliases = Column(JSON, nullable=False, default=list)
+    embedding = Column(Vector(768), nullable=False)
+    embed_model = Column(String, nullable=False)
+
+
+class NoteConcept(Base):
+    __tablename__ = "note_concepts"
+    note_id = Column(String, ForeignKey("notes.id", ondelete="CASCADE"), primary_key=True)
+    concept_key = Column(String, ForeignKey("intelligence_concepts.key", ondelete="CASCADE"), primary_key=True)
+    confidence = Column(Float, nullable=False)
+    mentions = Column(JSON, nullable=False, default=list)
+
+
+class IntelligenceLink(Base):
+    """One undirected pair, separate from legacy links and their existing constraints."""
+    __tablename__ = "intelligence_links"
+    src_id = Column(String, ForeignKey("notes.id", ondelete="CASCADE"), primary_key=True)
+    dst_id = Column(String, ForeignKey("notes.id", ondelete="CASCADE"), primary_key=True)
+    weight = Column(Float, nullable=False)
+    concepts = Column(JSON, nullable=False)

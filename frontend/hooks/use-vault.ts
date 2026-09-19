@@ -87,3 +87,33 @@ export function useRetryJob() {
 export function shouldRetry(failureCount: number, error: Error) {
   return !(error instanceof ApiError && error.status < 500) && failureCount < 1;
 }
+
+export function useGraph() {
+  return useQuery({
+    queryKey: ["graph"],
+    queryFn: ({ signal }) =>
+      request<import("@/lib/api").GraphData>("/graph", { signal }),
+    refetchInterval: 5000,
+  });
+}
+export function useIntelligence(id: string) {
+  return useQuery({
+    queryKey: ["intelligence", id],
+    queryFn: ({ signal }) =>
+      request<import("@/lib/api").Intelligence>(
+        `/notes/${encodeURIComponent(id)}/intelligence`,
+        { signal },
+      ),
+    refetchInterval: 3000,
+  });
+}
+export function useIntelligenceStatus() {
+  return useQuery({
+    queryKey: ["intelligence-status"],
+    queryFn: ({ signal }) =>
+      request<import("@/lib/api").IntelligenceStatus>("/intelligence/status", {
+        signal,
+      }),
+    refetchInterval: 3000,
+  });
+}
