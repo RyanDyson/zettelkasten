@@ -189,3 +189,13 @@ ZK_TEST_ADMIN_URL=postgresql://zk:zk@localhost:5433/postgres \
 The test database role needs `CREATEDB`. Tests use a temporary storage directory and never clear the application database. They cover actual PDF parsing and database persistence, upload validation, retries, recovery, CORS, OpenAPI, and responsive polling. Media inference is stubbed in the fast integration suite; real FFmpeg/Whisper smoke testing is a separate runtime check.
 
 Technical references: [FastAPI file uploads](https://fastapi.tiangolo.com/tutorial/request-files/), [faster-whisper](https://github.com/SYSTRAN/faster-whisper).
+
+### Note management
+
+- `PATCH /notes/{id}` with `{ "title": "New title" }` renames a note and its
+  Markdown title metadata without changing content, blocks, or the source.
+  Titles are trimmed, limited to 200 characters, and cannot contain control characters.
+- `DELETE /notes/{id}` removes the note, Markdown export, saved document,
+  intelligence job/result, and incoming/outgoing links. Original source files and
+  transcripts are retained. Missing notes return 404. Background intelligence
+  work checks the note still exists before persisting results.

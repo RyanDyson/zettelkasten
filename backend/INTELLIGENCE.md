@@ -82,3 +82,44 @@ bunx tsc --noEmit
 bun test
 bun run build
 ```
+
+## Note layout and formatting previews
+
+Notes without saved edits receive readable initial editor blocks from `note_layout.py`.
+Audio/video transcription segments flow within paragraphs, retaining blank-line boundaries.
+Wrapped lines become flowing paragraphs; blank paragraphs, explicit list markers,
+Markdown headings/quotes and obvious standalone headings retain their structure.
+This is a conservative text heuristic, not PDF layout/OCR reconstruction. Saved
+blocks, original transcripts and source files are never rewritten by this step.
+
+`GET /notes/{id}/intelligence` also returns `mentions`: named concepts and aliases
+with their related-note destinations. Source evidence may be entire sentences, so
+it is deliberately excluded from the highlight terms. The editor draws temporary,
+case-insensitive, whole-term decorations, including phrases across styled text.
+They refresh with connections and edits and are not stored in the note's content.
+Click or keyboard-activate a highlight to choose a connected note; titles matching
+the concept appear first.
+
+`POST /notes/{id}/format-preview` accepts `{ "blocks": [...] }` from the current
+draft and returns a proposed block document without writing to the database or
+vault. It uses the configured local Ollama model. The model chooses groups of
+immutable sentence units and exact phrases for bold/yellow emphasis. The server
+constructs the output from original text, enforces complete ordered coverage,
+bounds unit IDs in the output schema, and retries an invalid plan once. Failure
+returns an explicit error with no partial result. Before formatting, conservative
+line-break repair joins paragraph fragments, including styled fragments. Unsupported
+blocks, links, media, nesting and existing manual styles are preserved. Requests are limited to
+1,000 blocks and 120,000 JSON characters; larger requests fail explicitly.
+
+The UI offers Original/Formatted previews, Cancel, and Apply to draft. Apply uses
+the editor's undo history and checks that the preview still matches the current
+draft. The separate Save note action persists the result through the existing API.
+Formatting does not invent headings or turn ordinary prose into quotations.
+
+`POST /notes/{id}/layout-preview` repairs the current draft without calling Ollama,
+even when intelligence is disabled. **Fix line breaks** exposes this read-only
+preview for existing notes and drafts. It joins likely lowercase sentence
+continuations and soft wraps, preserving inline marks and links. Sentence endings,
+blank blocks, headings/lists/quotes/code/media, nested blocks, and different block
+styles remain boundaries. This heuristic can miss ambiguous breaks; users review
+the proposal before applying. Neither preview changes saved notes or transcripts.

@@ -7,7 +7,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { request, type NoteDetail } from "@/lib/api";
 import { GradientTabs } from "@/components/ui/gradient-tabs";
 import { ArrowLeft } from "lucide-react";
-import { useNote, useSource, useTranscript } from "@/hooks/use-vault";
+import {
+  useIntelligence,
+  useNote,
+  useSource,
+  useTranscript,
+} from "@/hooks/use-vault";
 import { MediaRenderer } from "@/components/media-renderer/main";
 const NoteEditor = dynamic(() => import("@/components/note-renderer/editor"), {
   ssr: false,
@@ -21,6 +26,7 @@ export function NoteDetailView({ id }: { id: string }) {
   const [tab, setTab] = useState("notes");
   const queryClient = useQueryClient();
   const note = useNote(id);
+  const intelligence = useIntelligence(id);
   const source = useSource(note.data?.source_id ?? null);
   const transcript = useTranscript(
     note.data?.source_id ?? null,
@@ -74,6 +80,8 @@ export function NoteDetailView({ id }: { id: string }) {
               noteId={id}
               content={note.data.content}
               blocks={note.data.blocks}
+              mentions={intelligence.data?.mentions}
+              formattingEnabled={intelligence.data?.enabled}
               onSave={async (document) => {
                 const saved = await request<NoteDetail>(
                   `/notes/${encodeURIComponent(id)}`,

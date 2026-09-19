@@ -78,3 +78,29 @@ bun run build
 ```
 
 API-client tests cover file validation, pagination, backend errors, connection failures, and multipart uploads. Backend tests also cover the original-file endpoint and byte-range requests used by media playback.
+
+### Readable notes and local formatting
+
+PDF text and audio/video transcription segments flow into paragraphs instead of
+one editor block per printed line or speech segment. Saved edits and existing
+drafts retain their layout until you apply a preview. Use **Fix line breaks** to
+repair those existing notes: compare **Repaired** and **Original**, then **Apply to
+draft** and **Save note**. This preserves your words, bold, highlights, and links
+and works without the local model. Intentional structural boundaries remain. Named concepts shared with other notes appear
+as subtle blue highlights; click one (or focus it and press Enter) to choose a
+connected note. These highlights are derived, so they do not change your draft,
+saved text, or source transcript.
+
+**Format note** also repairs sentence fragments before adding formatting. Use it to ask the configured local model for a formatting preview.
+Compare **Formatted** and **Original**, then **Apply to draft** or **Cancel**.
+Applying is undoable; **Save note** persists it. The formatter preserves original
+words and existing rich blocks, links, media, and manually styled text. The source
+transcript remains available unchanged under **Source & transcript**.
+
+### Rename or delete a note
+
+Right-click a note in **All notes** or **Recent notes** to choose **Rename** or
+**Delete**. Renaming keeps saved content and unsaved drafts. Deletion asks for
+confirmation, removes the note and its connections, clears its draft in the
+current tab, and returns to All notes if that note was open. The original upload
+and transcript remain available in Uploads.

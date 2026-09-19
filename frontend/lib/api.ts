@@ -136,7 +136,19 @@ export type GraphEdge = {
   concepts: string[];
 };
 export type GraphData = { nodes: Note[]; edges: GraphEdge[] };
+export type ConceptMention = {
+  concept: string;
+  terms: string[];
+  notes: {
+    note_id: string;
+    title: string;
+    score: number;
+    concepts: string[];
+  }[];
+};
+
 export type Intelligence = {
+  mentions: ConceptMention[];
   note_id: string;
   enabled: boolean;
   status: "not_indexed" | JobStatus;

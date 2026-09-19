@@ -236,6 +236,11 @@ def test_stored_alias_resolution_and_failed_refresh_are_atomic(indexing, client,
     result = wait_index(client, second)
     assert first in {r['note_id'] for r in result['related_notes']}
     assert result['concepts'] == ['test-orchidaceae']
+    mention = result['mentions'][0]
+    assert mention['concept'] == 'test-orchidaceae'
+    assert {'test-orchidaceae', 'test-orchid-family'} <= set(mention['terms'])
+    assert 'orchids' not in mention['terms']
+    assert first in {n['note_id'] for n in mention['notes']}
     original_persist = service.persist_result
     async def fail_after_writes(session, note_id, data):
         await original_persist(session, note_id, data)

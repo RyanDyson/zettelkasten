@@ -1,5 +1,6 @@
 "use client";
 
+import { NoteContextMenu } from "@/components/note-context-menu";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { FileText, Network, Upload, Search, ArrowUpRight } from "lucide-react";
@@ -113,22 +114,24 @@ export function AppSidebar() {
                 .filter((note, index) => index < 5 || drafts[note.id])
                 .map((note) => (
                   <SidebarMenuItem key={note.id}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={pathname === `/notes/${note.id}`}
-                    >
-                      <Link href={`/notes/${note.id}`} onClick={navigate}>
-                        <FileText className="size-3.5 text-primary" />
-                        <span className="min-w-0 flex-1 truncate">
-                          {note.title}
-                        </span>
-                        {drafts[note.id] && (
-                          <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                            Editing
+                    <NoteContextMenu noteId={note.id} title={note.title}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={pathname === `/notes/${note.id}`}
+                      >
+                        <Link href={`/notes/${note.id}`} onClick={navigate}>
+                          <FileText className="size-3.5 text-primary" />
+                          <span className="min-w-0 flex-1 truncate">
+                            {note.title}
                           </span>
-                        )}
-                      </Link>
-                    </SidebarMenuButton>
+                          {drafts[note.id] && (
+                            <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                              Editing
+                            </span>
+                          )}
+                        </Link>
+                      </SidebarMenuButton>
+                    </NoteContextMenu>
                   </SidebarMenuItem>
                 ))}
               {!notes.isPending && !notes.error && !notes.data?.length && (

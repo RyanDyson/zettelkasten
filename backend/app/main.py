@@ -94,7 +94,7 @@ class UploadSizeLimit:
 
 app.add_middleware(UploadSizeLimit)
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins,
-                   allow_methods=["GET", "POST"], allow_headers=["Content-Type"],
+                   allow_methods=["GET", "POST", "PATCH", "DELETE"], allow_headers=["Content-Type"],
                    expose_headers=["Content-Disposition"])
 app.include_router(ingest.router)
 app.include_router(jobs.router)

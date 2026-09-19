@@ -1,4 +1,5 @@
 from datetime import datetime
+import json
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
@@ -8,9 +9,12 @@ from sqlalchemy import func, or_, select
 from ..config import settings
 from ..db import SessionLocal
 from ..intelligence.service import enqueue_missing
-from ..models import (IntelligenceJob, IntelligenceLink, Link, Note, NoteConcept,
+from ..intelligence.formatting import format_blocks
+from ..intelligence.pipeline import IntelligenceError
+from ..models import (Concept, IntelligenceJob, IntelligenceLink, Link, Note, NoteConcept,
                       NoteIntelligence, Transcript, utcnow)
 from ..schemas import ErrorResponse, NoteSummary
+from ..note_layout import reflow_blocks
 
 router = APIRouter(tags=["Intelligence"], responses={404: {"model": ErrorResponse}})
 
@@ -22,6 +26,12 @@ class RelatedNote(BaseModel):
     concepts: list[str]
 
 
+class ConceptMention(BaseModel):
+    concept: str
+    terms: list[str]
+    notes: list[RelatedNote]
+
+
 class IntelligenceDetail(BaseModel):
     note_id: str
     enabled: bool
@@ -30,6 +40,7 @@ class IntelligenceDetail(BaseModel):
     summary: str | None = None
     concepts: list[str] = Field(default_factory=list)
     related_notes: list[RelatedNote] = Field(default_factory=list)
+    mentions: list[ConceptMention] = Field(default_factory=list)
     indexed_at: datetime | None = None
     model: str | None = None
     chunk_count: int | None = None
@@ -79,9 +90,20 @@ async def get_intelligence(note_id: str):
         titles = dict((await session.execute(select(Note.id, Note.title).where(Note.id.in_(ids)))).all()) if ids else {}
         related = [RelatedNote(note_id=other, title=titles[other], score=edge.weight, concepts=edge.concepts)
                    for edge, other in zip(edges, ids) if other in titles]
+        mention_rows = (await session.execute(select(NoteConcept, Concept)
+            .join(Concept, Concept.key == NoteConcept.concept_key)
+            .where(NoteConcept.note_id == note_id))).all()
+        mentions = []
+        for association, concept in mention_rows:
+            targets = [other for other in related if concept.key in other.concepts]
+            if targets:
+                # Evidence mentions may be whole sentences or pronouns ("this nutrient").
+                # Highlight named concepts and synonyms, never their surrounding evidence.
+                terms = sorted(set([concept.name, *concept.aliases]))
+                mentions.append(ConceptMention(concept=concept.key, terms=terms, notes=targets))
         return IntelligenceDetail(note_id=note_id, enabled=settings.intelligence_enabled,
             status=job.status if job else "not_indexed", error=job.error if job else None,
-            summary=result.summary if result else None, concepts=concepts, related_notes=related,
+            summary=result.summary if result else None, concepts=concepts, related_notes=related, mentions=mentions,
             indexed_at=result.created_at if result else None, model=result.model if result else None,
             chunk_count=result.chunk_count if result else None)
 
@@ -150,3 +172,43 @@ async def graph():
                 kind="concept" if isinstance(edge, IntelligenceLink) else edge.kind,
                 concepts=edge.concepts if isinstance(edge, IntelligenceLink) else [])
     return GraphResponse(nodes=[NoteSummary.model_validate(n) for n in notes], edges=list(edges.values()))
+
+
+class FormatRequest(BaseModel):
+    blocks: list[dict] = Field(min_length=1, max_length=1000)
+
+
+class LayoutPreview(BaseModel):
+    blocks: list[dict]
+    repaired_breaks: int
+
+
+class FormatPreview(LayoutPreview):
+    preserved_blocks: int
+    model: str
+
+
+@router.post("/notes/{note_id}/format-preview", response_model=FormatPreview,
+             summary="Preview local AI formatting of the current draft without saving it")
+async def format_preview(note_id: str, body: FormatRequest):
+    require_enabled()
+    if len(json.dumps(body.blocks, ensure_ascii=False)) > 120_000:
+        raise HTTPException(413, "This note is too large for a formatting preview. Format a shorter note.")
+    async with SessionLocal() as session:
+        if await session.get(Note, note_id) is None:
+            raise HTTPException(404, "Note not found.")
+    try:
+        return await format_blocks(body.blocks)
+    except IntelligenceError as exc:
+        raise HTTPException(502, str(exc)) from exc
+
+
+@router.post("/notes/{note_id}/layout-preview", response_model=LayoutPreview,
+             summary="Preview repair of broken line wraps while preserving draft words and styles")
+async def layout_preview(note_id: str, body: FormatRequest):
+    if len(json.dumps(body.blocks, ensure_ascii=False)) > 120_000:
+        raise HTTPException(413, "This note is too large for a layout preview.")
+    async with SessionLocal() as session:
+        if await session.get(Note, note_id) is None:
+            raise HTTPException(404, "Note not found.")
+    return reflow_blocks(body.blocks)

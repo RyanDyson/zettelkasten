@@ -103,6 +103,11 @@ async def process(note_id: str) -> None:
             raise IntelligenceError("No stored transcript is available for this note.")
         result = await analyze(content)
         async with SessionLocal() as session:
+            # Serialize with deletion in the same lock order (note, then job).
+            # A note deleted while Ollama was running must never be resurrected.
+            note = await session.get(Note, note_id, with_for_update=True)
+            if note is None:
+                return
             job = await session.get(IntelligenceJob, note_id, with_for_update=True)
             if job is None:
                 return
