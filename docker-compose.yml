@@ -1,0 +1,48 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: zk
+      POSTGRES_PASSWORD: zk
+      POSTGRES_DB: zk
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+    restart: unless-stopped
+    # Windows with NVIDIA: uncomment to pass through the GPU
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  api:
+    build: ./backend
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      ZK_DATABASE_URL: postgresql+asyncpg://zk:zk@db:5432/zk
+      ZK_OLLAMA_BASE_URL: http://ollama:11434
+      ZK_DATA_DIR: /data/zettelkasten
+    volumes:
+      - zk-data:/data/zettelkasten
+    depends_on:
+      - db
+      - ollama
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  ollama:
+  zk-data:
