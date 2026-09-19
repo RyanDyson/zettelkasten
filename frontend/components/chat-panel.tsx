@@ -78,6 +78,10 @@ function ChatPanelBody({ noteId }: { noteId?: string }) {
   const [sources, setSources] = useState<string[] | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
 
+  // Demo replays when the panel opens: user turns pop in, assistant turns type out.
+  const [demoIndex, setDemoIndex] = useState(0);
+  const [demoChars, setDemoChars] = useState(0);
+
   const create = useCreateChatSession();
   const send = useSendChatMessage();
   const remove = useDeleteChatSession();
@@ -95,8 +99,31 @@ function ChatPanelBody({ noteId }: { noteId?: string }) {
   const model = modelChoice && models.includes(modelChoice) ? modelChoice : (models[0] ?? null);
 
   useEffect(() => {
+    if (!demo || demoIndex >= FAKE_CHAT.messages.length) return;
+    const message = FAKE_CHAT.messages[demoIndex];
+    function advance(delay: number, nextIndex: number) {
+      const timer = window.setTimeout(() => {
+        setDemoIndex(nextIndex);
+        setDemoChars(0);
+      }, delay);
+      return () => window.clearTimeout(timer);
+    }
+    if (message.role !== "assistant") return advance(700, demoIndex + 1);
+    if (demoChars === 0) {
+      const timer = window.setTimeout(() => setDemoChars(1), 600);
+      return () => window.clearTimeout(timer);
+    }
+    if (demoChars >= message.content.length) return advance(500, demoIndex + 1);
+    const timer = window.setInterval(
+      () => setDemoChars((chars) => Math.min(chars + 5, message.content.length)),
+      20,
+    );
+    return () => window.clearInterval(timer);
+  }, [demo, demoIndex, demoChars]);
+
+  useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [demo, thread.data?.messages.length, send.isPending]);
+  }, [demo, demoChars, demoIndex, thread.data?.messages.length, send.isPending]);
 
   async function submit() {
     const content = input.trim();
@@ -128,11 +155,19 @@ function ChatPanelBody({ noteId }: { noteId?: string }) {
     setSources(null);
   }
 
-  const threadData = demo
-    ? { session: FAKE_CHAT.session, messages: FAKE_CHAT.messages }
-    : thread.data;
-  const messages = threadData?.messages ?? [];
-  const pending = send.isPending || create.isPending;
+  const messages = useMemo(() => {
+    if (!demo) return thread.data?.messages ?? [];
+    return FAKE_CHAT.messages
+      .slice(0, Math.min(demoIndex + 1, FAKE_CHAT.messages.length))
+      .map((message, index) =>
+        index === demoIndex && message.role === "assistant"
+          ? { ...message, content: message.content.slice(0, demoChars) }
+          : message,
+      );
+  }, [demo, thread.data, demoIndex, demoChars]);
+  const demoThinking =
+    demo && FAKE_CHAT.messages[demoIndex]?.role === "assistant" && demoChars <= 1;
+  const pending = demoThinking || send.isPending || create.isPending;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
