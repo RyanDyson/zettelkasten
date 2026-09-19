@@ -45,6 +45,7 @@ class Source(Base):
     original_name = Column(String)
     raw_path = Column(String)
     transcript_path = Column(Text, nullable=True)
+    intelligence_path = Column(Text, nullable=True)
     status = Column(Enum(JobStatus), default=JobStatus.queued)
     error = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=utcnow)
@@ -60,6 +61,7 @@ class Note(Base):
     tags = Column(String)  # comma-separated
     summary = Column(Text, nullable=True)
     embedding = Column(Vector(768))
+    keywords = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
     source = relationship("Source", backref="notes")
@@ -74,4 +76,3 @@ class Link(Base):
     kind = Column(String, default="similarity")  # similarity | tag
 
     __table_args__ = (UniqueConstraint("src_id", "dst_id", "kind"),)
-

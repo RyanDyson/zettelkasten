@@ -27,6 +27,7 @@ async def get_job(source_id: str):
             "source_id": source.id,
             "status": source.status.value if source.status else None,
             "error": source.error,
+            "intelligence_path": source.intelligence_path,
             "notes": [dict(r._mapping) for r in notes],
         }
 
@@ -61,6 +62,7 @@ async def get_note(note_id: str):
             "id": note.id,
             "title": note.title,
             "tags": note.tags,
+            "keywords": note.keywords,
             "summary": note.summary,
             "path": note.path,
             "content": await _read(note.path) if note.path else "",

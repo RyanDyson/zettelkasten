@@ -1,18 +1,25 @@
 import asyncio
+import json
 import logging
 import traceback
 from pathlib import Path
 
-from sqlalchemy import update
+from sqlalchemy import text, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from .config import TRANSCRIPTS_DIR, MEDIA_EXTENSIONS, settings
+from .config import CONTRACTS_DIR, TRANSCRIPTS_DIR, MEDIA_EXTENSIONS
 from .db import SessionLocal
+from .intelligence.embedder import get_vector
+from .intelligence import run_intelligence_pipeline
 from .models import JobStatus, Note, Source, new_id
-from .pipeline.core import append_links, embed, extract_audio, ollama_json, transcribe, write_note
-from .pipeline.linker import find_similar, save_links
+from .pipeline.core import extract_audio, transcribe, write_note
 
 log = logging.getLogger("zk.worker")
 queue: asyncio.Queue = asyncio.Queue()
+
+
+async def run_intelligence_for_dev2(raw_text: str, session: AsyncSession) -> dict:
+    return await run_intelligence_pipeline(raw_text, session)
 
 
 async def worker_loop() -> None:
@@ -45,38 +52,118 @@ async def process(source_id: str) -> None:
         if raw_path.suffix.lower() in MEDIA_EXTENSIONS:
             audio_path = TRANSCRIPTS_DIR / f"{source_id}.mp3"
             extract_audio(raw_path, audio_path)
-            text = transcribe(audio_path)
+            raw_text = transcribe(audio_path)
         else:
-            text = raw_path.read_text(encoding="utf-8")
+            raw_text = raw_path.read_text(encoding="utf-8")
 
         transcript_path = TRANSCRIPTS_DIR / f"{source_id}.md"
-        transcript_path.write_text(text, encoding="utf-8")
+        transcript_path.write_text(raw_text, encoding="utf-8")
         source.transcript_path = str(transcript_path)
         await session.commit()
 
-        data = await ollama_json(text)
-        created = []
-        for note in data.get("atomic_notes", [])[:20]:
-            note_id = new_id()
-            tags = note.get("tags", [])
-            path = write_note(note_id, note.get("title", "untitled"), note.get("body", ""), tags, source_id)
-            emb = await embed(f'{note.get("title", "")}\n{note.get("body", "")}')
-            similar = await find_similar(session, emb, exclude_id=note_id)
-            session.add(
-                Note(
-                    id=note_id,
-                    source_id=source_id,
-                    path=str(path),
-                    title=note.get("title", "untitled"),
-                    tags=",".join(tags),
-                    summary=note.get("body", "")[:200],
-                    embedding=emb,
-                )
+        intelligence = await run_intelligence_pipeline(raw_text, session)
+
+        contract_path = CONTRACTS_DIR / f"{source_id}.json"
+        contract_path.write_text(json.dumps(intelligence, indent=2), encoding="utf-8")
+        source.intelligence_path = str(contract_path)
+
+        doc = intelligence["document"]
+        title = doc["title"]
+        tags = doc["tags"]
+        note_id = new_id()
+        note_path = write_note(
+            note_id,
+            title,
+            doc["enriched_text"],
+            tags,
+            source_id,
+        )
+        session.add(
+            Note(
+                id=note_id,
+                source_id=source_id,
+                path=str(note_path),
+                title=title,
+                tags=",".join(tags),
+                summary=doc["summary"],
+                embedding=doc["embedding"],
+                keywords=",".join(sorted({c["canonical"] for c in intelligence["concepts"] if c.get("canonical")})),
             )
-            await save_links(session, note_id, similar, tags)
-            append_links(path, [nid for nid, _, _ in similar])
-            created.append(note_id)
-            await session.commit()
+        )
+        await session.flush()
+
+        concept_embedding_cache: dict[str, str] = {}
+        for concept in intelligence["concepts"]:
+            canonical = concept.get("canonical")
+            if not canonical:
+                continue
+            aliases = concept.get("aliases", [])
+            mention = concept.get("mentions", [canonical])[0] if concept.get("mentions") else canonical
+            confidence = float(concept.get("ai_confidence", 0.5))
+
+            cache_key = canonical.lower().strip()
+            if cache_key not in concept_embedding_cache:
+                concept_vector = await get_vector(canonical)
+                concept_embedding_cache[cache_key] = "[" + ",".join(
+                    f"{float(v):.10f}" for v in concept_vector
+                ) + "]"
+
+            await session.execute(
+                text(
+                    """
+                    INSERT INTO concept_index (canonical_name, aliases, note_id, embedding, source_phrase, confidence)
+                    VALUES (:canonical_name, :aliases, :note_id, CAST(:embedding AS vector), :source_phrase, :confidence)
+                    ON CONFLICT (canonical_name)
+                    DO UPDATE SET
+                        aliases = EXCLUDED.aliases,
+                        note_id = EXCLUDED.note_id,
+                        embedding = EXCLUDED.embedding,
+                        source_phrase = EXCLUDED.source_phrase,
+                        confidence = EXCLUDED.confidence,
+                        updated_at = NOW()
+                    """
+                ),
+                {
+                    "canonical_name": canonical,
+                    "aliases": aliases,
+                    "note_id": note_id,
+                    "embedding": concept_embedding_cache[cache_key],
+                    "source_phrase": mention,
+                    "confidence": confidence,
+                },
+            )
+
+        for relation in intelligence["relations"]:
+            await session.execute(
+                text(
+                    """
+                    INSERT INTO links (src_id, dst_id, weight, kind)
+                    VALUES (:src_id, :dst_id, :weight, 'concept')
+                    ON CONFLICT (src_id, dst_id, kind)
+                    DO UPDATE SET weight = EXCLUDED.weight
+                    """
+                ),
+                {
+                    "src_id": note_id,
+                    "dst_id": relation["target_note_id"],
+                    "weight": float(relation["confidence"]),
+                },
+            )
+            await session.execute(
+                text(
+                    """
+                    INSERT INTO links (src_id, dst_id, weight, kind)
+                    VALUES (:src_id, :dst_id, :weight, 'concept')
+                    ON CONFLICT (src_id, dst_id, kind)
+                    DO UPDATE SET weight = EXCLUDED.weight
+                    """
+                ),
+                {
+                    "src_id": relation["target_note_id"],
+                    "dst_id": note_id,
+                    "weight": float(relation["confidence"]),
+                },
+            )
 
         source.status = JobStatus.done
         await session.commit()

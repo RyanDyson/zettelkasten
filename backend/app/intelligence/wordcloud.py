@@ -1,0 +1,153 @@
+import math
+import re
+from collections import Counter
+
+from ..config import settings
+
+_WORD_RE = re.compile(r"[a-zA-Z][a-zA-Z0-9_-]+")
+
+_STOPWORDS = {
+    "a",
+    "about",
+    "above",
+    "after",
+    "again",
+    "against",
+    "all",
+    "am",
+    "an",
+    "and",
+    "any",
+    "are",
+    "as",
+    "at",
+    "be",
+    "because",
+    "been",
+    "before",
+    "being",
+    "below",
+    "between",
+    "both",
+    "but",
+    "by",
+    "can",
+    "did",
+    "do",
+    "does",
+    "doing",
+    "down",
+    "during",
+    "each",
+    "few",
+    "for",
+    "from",
+    "further",
+    "had",
+    "has",
+    "have",
+    "having",
+    "he",
+    "her",
+    "here",
+    "hers",
+    "herself",
+    "him",
+    "himself",
+    "his",
+    "how",
+    "i",
+    "if",
+    "in",
+    "into",
+    "is",
+    "it",
+    "its",
+    "itself",
+    "just",
+    "me",
+    "more",
+    "most",
+    "my",
+    "myself",
+    "no",
+    "nor",
+    "not",
+    "now",
+    "of",
+    "off",
+    "on",
+    "once",
+    "only",
+    "or",
+    "other",
+    "our",
+    "ours",
+    "ourselves",
+    "out",
+    "over",
+    "own",
+    "same",
+    "she",
+    "should",
+    "so",
+    "some",
+    "such",
+    "than",
+    "that",
+    "the",
+    "their",
+    "theirs",
+    "them",
+    "themselves",
+    "then",
+    "there",
+    "these",
+    "they",
+    "this",
+    "those",
+    "through",
+    "to",
+    "too",
+    "under",
+    "until",
+    "up",
+    "very",
+    "was",
+    "we",
+    "were",
+    "what",
+    "when",
+    "where",
+    "which",
+    "while",
+    "who",
+    "whom",
+    "why",
+    "with",
+    "would",
+    "you",
+    "your",
+    "yours",
+    "yourself",
+    "yourselves",
+}
+
+
+def compute_tf_idf(text: str) -> dict[str, float]:
+    tokens = [match.group(0).lower() for match in _WORD_RE.finditer(text)]
+    tokens = [t for t in tokens if t not in _STOPWORDS and len(t) > 2]
+    if not tokens:
+        return {}
+
+    counts = Counter(tokens)
+    max_tf = max(counts.values())
+
+    scored = {
+        token: round((tf / max_tf) * (1.0 + math.log(1.0 + tf)), 5)
+        for token, tf in counts.items()
+    }
+    top_items = sorted(scored.items(), key=lambda x: x[1], reverse=True)[
+        : settings.intelligence_wordcloud_limit
+    ]
+    return dict(top_items)
