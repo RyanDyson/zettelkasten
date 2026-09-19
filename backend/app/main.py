@@ -9,7 +9,7 @@ from sqlalchemy import text
 
 from .config import ensure_directories, settings
 from .db import SessionLocal, dispose, engine, init_db
-from .routers import ingest, jobs, intelligence
+from .routers import chat, ingest, jobs, intelligence
 from .intelligence.service import worker_loop as intelligence_loop
 from .schemas import HealthResponse
 from .worker import worker_loop
@@ -57,7 +57,7 @@ app = FastAPI(
                  "One Markdown note is saved per source. Local LLM indexing runs independently after transcription; "
                  "read /intelligence/status or /notes/{id}/intelligence for its progress. "
                  "This API is intended for a trusted local machine and has no authentication."),
-    openapi_tags=[{"name": name} for name in ("Ingestion", "Jobs", "Sources", "Notes", "Intelligence", "Graph", "Health")],
+    openapi_tags=[{"name": name} for name in ("Ingestion", "Jobs", "Sources", "Notes", "Intelligence", "Graph", "Chat", "Health")],
 )
 
 
@@ -99,6 +99,7 @@ app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins,
 app.include_router(ingest.router)
 app.include_router(jobs.router)
 app.include_router(intelligence.router)
+app.include_router(chat.router)
 
 
 @app.get("/health", tags=["Health"], response_model=HealthResponse,

@@ -51,20 +51,25 @@ export function NoteDetailView({ id }: { id: string }) {
     const element = event.target;
     setSavingTitle(true);
     try {
-      const saved = await request<NoteDetail>(
-        `/notes/${encodeURIComponent(id)}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title,
-            content: note.data?.content ?? "",
-            blocks: note.data?.blocks ?? null,
-          }),
-        },
+      // The save endpoint ignores titles by design; renaming has its own PATCH route.
+      await request<NoteDetail>(`/notes/${encodeURIComponent(id)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: note.data?.content ?? "",
+          blocks: note.data?.blocks ?? null,
+        }),
+      });
+      await request<NoteDetail>(`/notes/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+      queryClient.setQueryData<NoteDetail>(["note", id], (old) =>
+        old ? { ...old, title } : old,
       );
-      queryClient.setQueryData(["note", id], saved);
       queryClient.invalidateQueries({ queryKey: ["notes"] });
+      queryClient.invalidateQueries({ queryKey: ["graph"] });
       setEditingTitle(false);
     } catch (error) {
       toast.error(
