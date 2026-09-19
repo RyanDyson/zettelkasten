@@ -17,6 +17,7 @@ import {
 } from "@/lib/api";
 import { formatSeconds } from "@/lib/dates";
 import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 
 export function MediaRenderer({
   source,
@@ -35,40 +36,42 @@ export function MediaRenderer({
   const fileUrl = sourceFileUrl(source.id);
   return (
     <div className="space-y-7">
-      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        {transcript.language && (
-          <span className="rounded-md border px-2 py-1">
-            {transcript.language.toUpperCase()}
-          </span>
-        )}
-        {transcript.duration_seconds != null && (
-          <span className="rounded-md border px-2 py-1">
-            {formatSeconds(transcript.duration_seconds)}
-          </span>
-        )}
-        <Button asChild variant="outline" size="sm">
-          <a href={fileUrl} target="_blank" rel="noreferrer">
-            <ExternalLink className="size-3.5" />
-            Original file
-          </a>
-        </Button>
-        <Button asChild variant="outline" size="sm">
-          <a href={transcriptDownloadUrl(source.id)}>
-            <Download className="size-3.5" />
-            Export Markdown
-          </a>
-        </Button>
-      </div>
       {hasMedia && (
         <section className="space-y-3">
-          <h2 className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-            {source.kind === "audio" ? (
-              <AudioLines className="size-4" />
-            ) : (
-              <Film className="size-4" />
-            )}
-            Original recording
-          </h2>
+          <div className="w-full justify-between flex items-center">
+            <h2 className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              {source.kind === "audio" ? (
+                <AudioLines className="size-4" />
+              ) : (
+                <Film className="size-4" />
+              )}
+              Original recording
+              {transcript.language && (
+                <span className="px-2 py-1">
+                  {transcript.language.toUpperCase()}
+                </span>
+              )}
+              {transcript.duration_seconds != null && (
+                <span className="px-2 py-1">
+                  {formatSeconds(transcript.duration_seconds)}
+                </span>
+              )}
+            </h2>
+            <ButtonGroup>
+              <Button asChild variant="outline" size="sm">
+                <a href={fileUrl} target="_blank" rel="noreferrer">
+                  <ExternalLink className="size-3.5" />
+                  Original file
+                </a>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <a href={transcriptDownloadUrl(source.id)}>
+                  <Download className="size-3.5" />
+                  Export Markdown
+                </a>
+              </Button>
+            </ButtonGroup>
+          </div>
           {source.kind === "audio" ? (
             <audio
               ref={(el) => {
@@ -102,27 +105,28 @@ export function MediaRenderer({
       )}
       <section>
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="flex items-center gap-2 font-medium">
+          <h2 className="flex items-center gap-2 font-medium text-primary">
             <FileText className="size-4 text-primary" />
             {hasMedia ? "Transcript" : "Extracted text"}
           </h2>
           {transcript.segments.length > 0 && (
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={() => setShowSegments(!showSegments)}
+              className="cursor-pointer"
             >
               {showSegments ? "Read full text" : "Show timestamps"}
             </Button>
           )}
         </div>
         {showSegments ? (
-          <div className="space-y-1">
+          <div className="divide divide-y">
             {transcript.segments.map((segment, index) => (
               <button
                 key={index}
                 type="button"
-                className="flex w-full gap-4 rounded-lg p-3 text-left hover:bg-accent"
+                className="flex w-full text-justify gap-4 p-3 hover:bg-accent"
                 aria-label={`Seek to ${formatSeconds(segment.start)}: ${segment.text}`}
                 onClick={() => {
                   if (media.current) {
@@ -131,10 +135,12 @@ export function MediaRenderer({
                   }
                 }}
               >
-                <span className="pt-1 font-mono text-xs text-primary">
+                <span className="pt-1 font-mono font-bold text-xs text-primary">
                   {formatSeconds(segment.start)}
                 </span>
-                <span className="text-sm leading-6">{segment.text}</span>
+                <span className="text-sm leading-6 text-justify">
+                  {segment.text}
+                </span>
               </button>
             ))}
           </div>

@@ -21,11 +21,11 @@ export function GradientTabs({
       role="tablist"
       data-slot="gradient-tabs"
       className={cn(
-        "inline-flex items-center gap-1 border bg-linear-to-b from-primary/10 to-primary/20 backdrop-blur-sm rounded-full border-primary/30 p-0.5 dark:border-primary/50",
+        "inline-flex h-fit items-center gap-1 border bg-linear-to-b from-primary/10 to-primary/20 backdrop-blur-sm rounded-full border-primary/30 p-0.5 dark:border-primary/50",
         className,
       )}
     >
-      <div className="flex flex-row gap-0.5 bg-muted rounded-full border p-0.5">
+      <div className="flex flex-row gap-0.5 bg-muted rounded-full p-0.5">
         {items.map((item) => {
           const active = item.value === value;
           return (

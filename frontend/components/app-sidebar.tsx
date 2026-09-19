@@ -58,9 +58,6 @@ export function AppSidebar() {
         >
           Zettelkasten<span className="text-primary">.</span>
         </Link>
-        <p className="text-xs text-muted-foreground">
-          Your local knowledge library
-        </p>
       </SidebarHeader>
       <SidebarContent className="px-2">
         <SidebarGroup>

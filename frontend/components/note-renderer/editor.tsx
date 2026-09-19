@@ -4,11 +4,12 @@ import "@blocknote/shadcn/style.css";
 import type { Block, PartialBlock } from "@blocknote/core";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
-import { useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { useEffect, useRef, useState } from "react";
 import { noteDrafts, useNoteDrafts } from "@/hooks/use-note-drafts";
 
 export type EditedNote = { content: string; blocks: Block[] };
+
+const AUTOSAVE_MS = 1500;
 
 export default function NoteEditor({
   noteId,
@@ -74,30 +75,44 @@ export default function NoteEditor({
       setError(
         error instanceof Error ? error.message : "Could not save this note.",
       );
+      if (noteDrafts.getSnapshot().drafts[noteId]) {
+        // Changes happened while saving failed; retry shortly.
+        setTimeout(() => void save(), AUTOSAVE_MS);
+      }
     } finally {
       setSaving(false);
     }
   }
 
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  const draft = drafts[noteId];
+  useEffect(() => {
+    if (!onSave || !draft) return;
+    const timer = setTimeout(() => void saveRef.current(), AUTOSAVE_MS);
+    return () => clearTimeout(timer);
+  }, [onSave, noteId, draft]);
+
+  useEffect(() => {
+    if (!onSave || !dirty) return;
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => window.removeEventListener("beforeunload", beforeUnload);
+  }, [onSave, dirty]);
+
   return (
     <div className="space-y-4">
       {onSave && (
-        <div className="flex items-center justify-end gap-3 text-xs text-muted-foreground">
+        <div className="flex items-center justify-end text-xs text-muted-foreground">
           <span role="status">
             {saving
               ? "Saving…"
-              : dirty
-                ? "Editing · Draft kept in this tab"
-                : "Saved"}
+              : dirty || error
+                ? "Auto-saving…"
+                : "All changes saved"}
           </span>
-          <Button
-            variant="gradient_primary"
-            size="sm"
-            disabled={!dirty || saving}
-            onClick={() => void save()}
-          >
-            Save note
-          </Button>
         </div>
       )}
       {error && (

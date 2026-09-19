@@ -22,11 +22,17 @@ const states = {
     className: "bg-destructive/10 text-destructive",
   },
 };
-export function JobStatusBadge({ status }: { status: JobStatus }) {
-  const { label, Icon, className } = states[status];
+export function JobStatusBadge({
+  status,
+  className,
+}: {
+  status: JobStatus;
+  className?: string;
+}) {
+  const { label, Icon, className: stateClass } = states[status];
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium ${stateClass} ${className ?? ""}`}
     >
       <Icon
         className={`size-3 ${status === "processing" ? "animate-spin" : ""}`}

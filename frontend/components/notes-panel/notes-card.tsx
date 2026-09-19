@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { formatDate } from "@/lib/dates";
+import { cn } from "cn";
 
 export type NotesCardProps = {
   title: string;
@@ -22,7 +23,10 @@ export function NotesCard({
       href={`/notes/${notesId}`}
       aria-current={selected ? "page" : undefined}
       data-selected={selected}
-      className="flex flex-col gap-2 border-b p-4 transition-colors hover:bg-linear-to-b hover:from-primary/10 hover:to-primary/30 data-[selected=true]:bg-accent"
+      className={cn(
+        "flex flex-col gap-2 border-b p-4 transition-colors hover:bg-linear-to-b hover:from-primary/0 hover:to-primary/20 ",
+        selected && "bg-linear-to-b from-primary/20 to-primary/30",
+      )}
     >
       <div className="flex items-center gap-2">
         <h3 className="min-w-0 flex-1 truncate text-sm font-medium">{title}</h3>
