@@ -4,6 +4,15 @@ Upload **PDF, audio, or video**, extract its text, and store it in PostgreSQL. A
 
 The Next.js frontend provides uploads, editable notes, drafts, transcripts, media playback, and a graph of real connections. After transcription, a separate local Ollama worker summarizes the original source and links notes through shared concepts. LLM errors do not interrupt ingestion or editing.
 
+## One-command setup (recommended)
+
+Installs Bun, Docker checks, Ollama + the two local models, the `.env`, the backend/database containers, and the UI — then opens the browser.
+
+- **Windows** (PowerShell): `powershell -ExecutionPolicy Bypass -File scripts\setup.ps1`
+- **macOS / Linux**: `bash scripts/setup.sh`
+
+Already have Ollama and its models? Add `-SkipOllama` (Windows) or `SKIP_OLLAMA=1` (macOS/Linux).
+
 ## Start
 
 Requires Docker with Compose and Ollama running on the host. Install the local models once:

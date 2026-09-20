@@ -82,6 +82,7 @@ export function Uploads() {
             >
               <DialogTrigger asChild>
                 <Button
+                  data-tour="upload-trigger"
                   variant="gradient_primary"
                   className="rounded-full cursor-pointer"
                 >
@@ -98,6 +99,7 @@ export function Uploads() {
                   </DialogDescription>
                 </DialogHeader>
                 <div
+                  data-tour="upload-dropzone"
                   onDragOver={(event) => {
                     event.preventDefault();
                     setDragging(true);

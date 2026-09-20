@@ -3,12 +3,13 @@
 import { NoteContextMenu } from "@/components/note-context-menu";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FileText, Network, Upload, Search, ArrowUpRight } from "lucide-react";
+import { FileText, Network, Upload, Search, ArrowUpRight, Play, Square } from "lucide-react";
 import { useNotes, useSources } from "@/hooks/use-vault";
 import { useNoteDrafts } from "@/hooks/use-note-drafts";
 import { draftsFirst } from "@/lib/note-drafts";
 import { API_URL } from "@/lib/api";
 import { openCommand } from "@/components/nav-command";
+import { useDemoTour } from "@/components/demo/demo-controller";
 import {
   Sidebar,
   SidebarContent,
@@ -31,6 +32,7 @@ export function AppSidebar() {
   const sidebarNotes = draftsFirst(notes.data ?? [], drafts);
   const sources = useSources();
   const { isMobile, setOpenMobile } = useSidebar();
+  const tour = useDemoTour();
   const navigate = () => {
     if (isMobile) setOpenMobile(false);
   };
@@ -146,6 +148,25 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter className="border-t p-4">
+        {tour.active ? (
+          <button
+            type="button"
+            onClick={tour.stop}
+            className="mb-2 flex w-full items-center justify-between text-xs text-primary"
+          >
+            Exit demo
+            <Square className="size-3.5" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={tour.start}
+            className="mb-2 flex w-full items-center justify-between text-xs text-muted-foreground hover:text-primary"
+          >
+            Run product demo
+            <Play className="size-3.5" />
+          </button>
+        )}
         <a
           href={`${API_URL}/docs`}
           target="_blank"
