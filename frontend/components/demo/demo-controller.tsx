@@ -93,14 +93,21 @@ const SCENES: Scene[] = [
     title: "Every upload becomes a note",
     text: "A local LLM extracts concepts and links this note into the graph.",
     hold: 5000,
+  },
+  {
+    route: "/notes/demo-note-1",
+    target: 'a[href="#demo-note-2"]',
+    title: "Follow the hyperlinks in your notes",
+    text: "Concepts connect notes — watch the demo click this link and open the related note.",
+    hold: 3000,
     action: "openRelated",
   },
   {
     route: "/notes/demo-note-2",
     target: '[data-tour="note-title"]',
     title: "Hyperlinks keep threads together",
-    text: "Related notes are one click away — the demo just followed one automatically.",
-    hold: 3800,
+    text: "This is the note the link opened; its own connections point back.",
+    hold: 4200,
   },
   {
     route: "/",
@@ -222,13 +229,23 @@ export function DemoProvider({ children }: { children?: React.ReactNode }) {
           if (def.awaitTarget) await waitUntil(def.awaitTarget, 60_000);
           if (cancelled || nonce.current !== myNonce) return;
           if (def.action) {
-            if (def.action === "openDialog") await click(def.target);
-            else if (def.action === "drop") dropFile('[data-tour="upload-dropzone"]');
-            else if (def.action === "openRelated") {
-              const link = await waitFor('[data-tour="related-note"]');
-              link?.click();
+          if (def.action === "openDialog") await click(def.target);
+          else if (def.action === "drop") dropFile('[data-tour="upload-dropzone"]');
+          else if (def.action === "openRelated") {
+            const link = await waitFor('a[href="#demo-note-2"]');
+            if (link) {
+              // Show the click visibly before following the link.
+              link.style.transition = "box-shadow .2s, transform .2s";
+              link.style.boxShadow = "0 0 0 5px rgba(138,140,255,.4)";
+              link.style.transform = "scale(1.04)";
+              link.style.transformOrigin = "center";
+              await sleep(900);
+              link.style.boxShadow = "";
+              link.style.transform = "";
+              link.click();
               await sleep(500);
-            } else if (def.action === "openChat") await click('[data-tour="chat-open"]');
+            }
+          } else if (def.action === "openChat") await click('[data-tour="chat-open"]');
           }
         }
         if (!cancelled && nonce.current === myNonce) stop();

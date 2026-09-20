@@ -16,6 +16,7 @@ export const DEMO_NOTE_1_TITLE = "A Jobless Future: A New Renaissance?";
 export const DEMO_NOTE_2_TITLE = "Universal Basic Income Notebooks";
 export const DEMO_CONCEPTS = ["jobless future", "paid work", "new renaissance"];
 
+export const DEMO_NOTE_LINK = "#demo-note-2";
 export const DEMO_NOTE_1_CONTENT = `# A Jobless Future: A New Renaissance?
 
 **Core idea.** Rather than fearing a jobless future, we could see it as an opportunity: freedom from working for pay could allow people to pursue what they truly want to do.
@@ -24,7 +25,7 @@ export const DEMO_NOTE_1_CONTENT = `# A Jobless Future: A New Renaissance?
 
 **Challenges.** The transition would involve setbacks and uneven progress, and politics could obstruct change.
 
-See the connected note: [[Universal Basic Income Notebooks]] for how people's material needs might actually be met during the transition.
+See the connected note: [Universal Basic Income Notebooks](${DEMO_NOTE_LINK}) for how people's material needs might actually be met during the transition.
 `;
 
 export const DEMO_NOTE_2_CONTENT = `# Universal Basic Income Notebooks
@@ -35,6 +36,54 @@ export const DEMO_NOTE_2_CONTENT = `# Universal Basic Income Notebooks
 
 **Unresolved.** How the transition would be financed and managed politically.
 `;
+
+const text = (value: string, styles?: Record<string, boolean>) => ({
+  type: "text",
+  text: value,
+  styles: styles ?? {},
+});
+const boldText = (value: string) => text(value, { bold: true });
+
+// BlockNote's PartialBlock types are exhaustive over the editor schema; the
+// demo fixture only mirrors the default schema, hence the collected offsets.
+const blocks = (value: unknown) => value as PartialBlock[];
+
+function demoBlocks(which: 1 | 2): PartialBlock[] {
+  const h = (line: string, level = 1) => ({
+    type: "heading",
+    props: { level, textAlignment: "left" },
+    content: [text(line)],
+  });
+  const p = (items: unknown) => ({
+    type: "paragraph",
+    content: items,
+  });
+  if (which === 1)
+    return blocks([
+      h(DEMO_NOTE_1_TITLE),
+      p([
+        boldText("Core idea. "),
+        text("Rather than fearing a jobless future, we could see it as an opportunity: freedom from working for pay could allow people to pursue what they truly want to do."),
+      ]),
+      p([boldText("A new human renaissance. "), text("People could devote themselves to art, dance, and music; invention and creativity; caring for others.")]),
+      p([boldText("Challenges. "), text("The transition would involve setbacks and uneven progress, and politics could obstruct change.")]),
+      p([
+        text("See the connected note: "),
+        {
+          type: "link",
+          href: DEMO_NOTE_LINK,
+          content: [text("Universal Basic Income Notebooks")],
+        },
+        text(" for how people's material needs might actually be met during the transition."),
+      ]),
+    ]);
+  return blocks([
+    h(DEMO_NOTE_2_TITLE),
+    p([boldText("Open question. "), text("If paid work disappears, who pays rent and food when nobody is paid?")]),
+    p([boldText("Proposed instruments. "), text("Universal basic income, public services, and shared compute dividends surface as candidate answers.")]),
+    p([boldText("Unresolved. "), text("How the transition would be financed and managed politically.")]),
+  ]);
+}
 
 export const mockSource = (status: "queued" | JobStatus = "done") => ({
   id: DEMO_SOURCE_ID,
@@ -88,11 +137,11 @@ export function noteSummary(which: 1 | 2) {
 }
 
 export function noteDetail(which: 1 | 2) {
-  const blocks: PartialBlock[] | null = null;
   return {
     ...noteSummary(which),
     content: which === 1 ? DEMO_NOTE_1_CONTENT : DEMO_NOTE_2_CONTENT,
-    blocks,
+    // Blocks render the note in the editor with a real link to follow.
+    blocks: demoBlocks(which),
   };
 }
 
