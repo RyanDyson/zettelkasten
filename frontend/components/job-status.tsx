@@ -25,13 +25,15 @@ const states = {
 export function JobStatusBadge({
   status,
   className,
+  ...rest
 }: {
   status: JobStatus;
   className?: string;
-}) {
+} & Omit<React.ComponentProps<"span">, "className">) {
   const { label, Icon, className: stateClass } = states[status];
   return (
     <span
+      {...rest}
       className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium ${stateClass} ${className ?? ""}`}
     >
       <Icon

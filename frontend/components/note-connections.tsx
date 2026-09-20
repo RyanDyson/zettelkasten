@@ -93,6 +93,7 @@ export function NoteConnections({ id }: { id: string }) {
           <div className="mt-3 space-y-2">
             {data.related_notes.map((note) => (
               <Link
+                data-tour="related-note"
                 key={note.note_id}
                 href={`/notes/${note.note_id}`}
                 className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm transition-colors hover:bg-accent"

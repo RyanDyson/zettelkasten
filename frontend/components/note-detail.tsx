@@ -133,7 +133,10 @@ export function NoteDetailView({ id }: { id: string }) {
             </>
           ) : (
             <>
-              <h1 className="min-w-0 flex justify-start items-center truncate text-primary gap-2 px-4 p-1 bg-linear-to-b from-primary/10 to-primary/20 backdrop-blur-xl border border-primary/30 rounded-full font-semibold tracking-tight">
+              <h1
+            data-tour="note-title"
+            className="min-w-0 flex justify-start items-center truncate text-primary gap-2 px-4 p-1 bg-linear-to-b from-primary/10 to-primary/20 backdrop-blur-xl border border-primary/30 rounded-full font-semibold tracking-tight"
+          >
                 {note.data.title}
                 <Button
                   variant="ghost"

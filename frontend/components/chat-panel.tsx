@@ -48,6 +48,7 @@ export function ChatPanel({ noteId }: { noteId?: string }) {
   return (
     <>
       <Button
+        data-tour="chat-open"
         variant="gradient_primary"
         size="icon-lg"
         aria-label="Open AI chat"

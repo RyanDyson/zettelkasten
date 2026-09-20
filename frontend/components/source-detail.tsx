@@ -43,10 +43,13 @@ export function SourceDetailView({ id }: { id: string }) {
           </span>
         </div>
         <div className="min-w-0 flex items-center gap-3 justify-between w-full">
-          <h1 className="min-w-0 flex justify-start items-center truncate text-primary gap-2 px-4 p-1 bg-linear-to-b from-primary/10 to-primary/20 backdrop-blur-xl border border-primary/30 rounded-full font-semibold tracking-tight">
+          <h1
+            data-tour="source-title"
+            className="min-w-0 flex justify-start items-center truncate text-primary gap-2 px-4 p-1 bg-linear-to-b from-primary/10 to-primary/20 backdrop-blur-xl border border-primary/30 rounded-full font-semibold tracking-tight"
+          >
             {source.data.original_name}
           </h1>
-          <JobStatusBadge className="shrink-0" status={status} />
+          <JobStatusBadge className="shrink-0" data-tour="source-status" status={status} />
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -55,10 +58,11 @@ export function SourceDetailView({ id }: { id: string }) {
           <ErrorState error={job.error} retry={() => void job.refetch()} />
         )}
         {(status === "queued" || status === "processing") && (
-          <div
-            role="status"
-            className="rounded-xl border bg-muted/50 p-8 text-center"
-          >
+        <div
+          data-tour="source-status"
+          role="status"
+          className="rounded-xl border bg-muted/50 p-8 text-center"
+        >
             <LoaderCircle className="mx-auto mb-4 size-6 animate-spin text-primary" />
             <p className="font-medium">
               {status === "queued"
