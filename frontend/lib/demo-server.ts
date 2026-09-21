@@ -36,10 +36,10 @@ function status(): JobStatus {
 
 function timeline() {
   state.phase = "queued";
-  schedule(900, () => {
+  schedule(500, () => {
     state.phase = "processing";
   });
-  schedule(5200, () => {
+  schedule(3400, () => {
     state.phase = "done";
   });
 }
