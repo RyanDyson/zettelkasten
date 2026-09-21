@@ -1,8 +1,16 @@
 # Zettelkasten
 
+<img width="1920" height="1140" alt="image 3" src="https://github.com/user-attachments/assets/0438c921-70a8-46c9-ae50-e4bd874b76c8" />
+
 Upload **PDF, audio, or video**, extract its text, and store it in PostgreSQL. Audio and video use FFmpeg plus local Whisper (`faster-whisper`). The API includes interactive Swagger UI for frontend integration.
 
 The Next.js frontend provides uploads, editable notes, drafts, transcripts, media playback, and a graph of real connections. After transcription, a separate local Ollama worker summarizes the original source and links notes through shared concepts. LLM errors do not interrupt ingestion or editing.
+
+## Contributors
+- @RyanDyson
+- @LeonnR
+- @nbekajaya
+- @santosobryan
 
 ## One-command setup (recommended)
 
@@ -74,3 +82,4 @@ Existing notes are indexed automatically when intelligence is enabled. This adds
 PDFs must contain selectable text. Image-only/scanned PDFs need OCR, which is outside this version. Pasted text, `.txt`, Markdown, and Word uploads are not accepted.
 
 See [backend/README.md](backend/README.md) for the frontend example, API contract, configuration, storage, testing, and local development.
+
